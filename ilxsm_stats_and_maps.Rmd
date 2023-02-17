@@ -92,7 +92,7 @@ unique_areas
 Next, I identify latitude and longitude for the center point of each stat area, 
 so that I can plot the locations in a map. These coordinates do not indicate 
 the actual fishing locations, but rather are the centerpoint derived from 
-the map of statistical areas available at the GARFO website: <https://www.fisheries.noaa.gov/resource/map/greater-atlantic-region-statistical-areas>. 
+the map of statistical areas available at the [GARFO website](https://www.fisheries.noaa.gov/resource/map/greater-atlantic-region-statistical-areas). 
 
 
 
@@ -139,11 +139,17 @@ lw_tally <- lw_data %>%
   summarise(n = length(ORGANISM_ID))
 
 lw_tally <- lw_tally[-c(1:4,12:14, 19:20),] # this is not an 
-# ideal way to do this - will change year to a param in quarto
+# ideal way to do this - will change year to a param in quarto, removes area
+# codes that are mixed areas
 lw21 = lw_tally %>% filter(year ==2021)
 lw22 = lw_tally %>% filter(year ==2022)
 lw23 = lw_tally %>% filter(year ==2023)
 
+lw_tally_by_week <- lw_data %>% 
+  group_by(AREA_CODE, year, week) %>%
+  summarise(n = length(ORGANISM_ID))
+# removes area codes that are mixed areas
+#lw_tally_by_week <- lw_tally[-c(1:4,12:14, 19:20),] 
 
 
 
@@ -196,8 +202,8 @@ vesshold <- read_excel("vessel_type_2021.xlsx",
          VESSEL_NAME = VESSNAME) %>%
   mutate(VESSHOLD = str_to_upper(VESSHOLD))
 
-vesshold %>% filter(!(VESSHOLD %in% c("ICE", "FT", "RSW"))) %>% 
-  dplyr::select("PERMIT", "COMMENT")
+# vesshold %>% filter(!(VESSHOLD %in% c("ICE", "FT", "RSW"))) %>% 
+#   dplyr::select("PERMIT", "COMMENT")
 
   lw_paired <- lw_paired %>%
   left_join(vesshold, by = 'VESSEL_NAME') %>%
@@ -277,13 +283,26 @@ The number of squid measured at each site are shown below for each year:
 
 ```{r}
 
-ggplot(lw_tally, aes(x = AREA_CODE, y = n, color = factor(year))) + 
-  geom_line(cex = 1.2) +
-  geom_point(size = 2.5) +
-  labs(x = 'Statistical Area', y = 'Number of samples (n)') +
+ggplot(lw_tally_by_week, aes(x = week, y = n, color = factor(year))) + 
+  geom_line(cex = 1) +
+  geom_point(size = 1) +
+  labs(x = 'Week', y = 'Number of samples (n)') +
   labs(color = 'Year') +
   scale_color_manual(values=c('gold1','slateblue3','violetred1'))+
+  ecodata::theme_facet()+
+  facet_wrap(~year)
+
+ggplot(data = lw_tally, aes(x = factor(AREA_CODE), y = n, 
+                            fill = factor(year))) +
+  geom_bar(stat ='identity', position = position_dodge(), color = 'black') +
+  scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
+  labs(x = 'Week', y = 'Number of samples (n)') +
+  labs(fill = 'Year') +
   ecodata::theme_ts()
+       
+
+
+
 
 ```
 
@@ -330,7 +349,26 @@ depths <- c(0,50,100,200,300,500,Inf)
 depths2 <- c('0','50','100','200','>300')
 blues2 <- blues[c(5,7,9,11,13,24)]
 
+## -- Set up quick simple map for future plots -- ## 
+shp_df <- broom::tidy(stat_areas2, region = 'Id')
+cnames <- aggregate(cbind(long, lat) ~ id, data=shp_df, FUN=mean)
+# Adjust a couple of the stat area label locations
+cnames[1,c(2,3)] <- c(-69.50, 40.50)
+cnames[3,c(2,3)] <- c(-70.75, 40.50)
+cnames[5,c(2,3)] <- c(-66.75, 41.25)
+stat_map_no_lab =  ggplot() + geom_polygon(data = stat_areas2,
+                               aes(x = long, y = lat, group = group), 
+                               colour = "black", fill = NA) + theme_void() 
+stat_map = stat_map_no_lab + geom_text(data = cnames, 
+                                aes(x = long, y = lat, label = id), 
+                                size = 2) + 
+  geom_sf(data = US.areas %>% st_as_sf() ,
+          color = 'gray20', fill = 'wheat2') +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,42.3), 
+           datum = sf::st_crs(4326)) 
 
+
+## -- Back to points of interest for the main detailed map below -- ##
 
 # Major Ports  
 ports <- data.frame(lon = c( -70.9342,-71.4856,-74.9060, -76.3452), 
@@ -580,9 +618,19 @@ g = ggplot(data = lw_tally %>% filter(year==2021),
   ecodata::theme_ts() 
 
 
-g + theme(axis.text = element_text(size = 10), 
+g = g + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
-        axis.ticks.length = unit(-1.4, "mm"))   
+        axis.ticks.length = unit(-1.4, "mm"))  
+
+# Inset a map of stat areas for reference
+
+g + inset_element(p = stat_map,
+                left = 0.01,
+                bottom = 0.65,
+                right = 0.5,
+                top = 0.95)
+
+# Set up data to create a pie chart depicting how many samples are paired 
 
 datpie21 <- data.frame('Category' = c('Unpaired samples', 'Paired samples'),
                      'Proportion' = c((nrow(lw_data %>% filter(year == 2021))-nrow(lw_paired %>% filter(year == 2021)))/nrow(lw_data %>% filter(year == 2021))*100,
@@ -603,6 +651,8 @@ ggplot(datpie21, aes(x="", y=Proportion, fill= factor(Category))) +
 
 
 ```
+
+
 
 
 ```{r}
@@ -645,10 +695,19 @@ g = ggplot(data = lw_tally %>% filter(year==2022),
   ylab('Number of organisms measured') +
   ecodata::theme_ts() 
 
-g + theme(axis.text = element_text(size = 10), 
+g = g + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
         axis.ticks.length = unit(-1.4, "mm"))   
 
+# Inset a map of stat areas for reference
+
+g + inset_element(p = stat_map,
+                left = 0.01,
+                bottom = 0.65,
+                right = 0.5,
+                top = 0.95)
+
+# Set up data to create a pie chart depicting how many samples are paired 
 datpie22 <- data.frame('Category' = c('Total samples', 'Paired samples'),
                      'Proportion' = c((nrow(lw_data %>% filter(year == 2022))-nrow(lw_paired %>% filter(year == 2022)))/nrow(lw_data %>% filter(year == 2022))*100,
                                       nrow(lw_paired %>% filter(year == 2022))/nrow(lw_data %>% filter(year == 2022))*100))
@@ -692,28 +751,6 @@ ggplot(wt_full %>% filter(year == 2022), aes(x = weight, y = factor(week),
   scale_fill_brewer(name = '', palette = 'Purples') +
   ecodata::theme_ts()
 
-## -- Rainbow, no stats -- ##
-# ggplot(ml_full %>% filter(year == 2022),
-#        aes(x = length, y = factor(week), fill =  factor(week))) +
-#   geom_density_ridges(alpha = .8, color = 'white',
-#                       scale = 2.5, rel_min_height = .01) +
-#   labs(title = '2022 Illex Lengths', x = 'Lengths (mm)',
-#        y = 'Week', fill = 'Week') +
-#   guides(color = guide_legend(title = 'Week')) +
-#   theme_ridges() +
-#   theme_classic()
-
-# ggplot(wt_full %>% filter(year == 2022),
-#        aes(x = weight, y = factor(week), fill =  factor(week))) +
-#   geom_density_ridges(alpha = .8, color = 'white',
-#                       scale = 2.5, rel_min_height = .01) +
-#   labs(title = '2022 Illex Weights', x = 'Weight (gm)',
-#        y = 'Week', fill = 'Week') +
-#   guides(color = guide_legend(title = 'Week')) +
-#   theme_ridges() +
-#   theme_classic()
-
-
 
 ```
 
@@ -726,6 +763,8 @@ In 2023 there were a total of **`r sum(subset(lw_tally, year == 2023, select = n
 organisms measured across **`r length(unique(lw23$AREA_CODE))`** statistical areas. 
 
 ```{r}
+
+
 g = ggplot(data = lw_tally %>% filter(year==2023), 
            aes(x = factor(AREA_CODE), y = n)) +
   geom_bar(stat ='identity', fill = 'violetred1', col = 'black') + 
@@ -733,11 +772,17 @@ g = ggplot(data = lw_tally %>% filter(year==2023),
   ylab('Number of organisms measured') +
   ecodata::theme_ts() 
 
-g + theme(axis.text = element_text(size = 10), 
+g = g + theme(axis.text = element_text(size = 10), 
           axis.title = element_text(size = 10),
           axis.ticks.length = unit(-1.4, "mm")) 
 
+g + inset_element(p = stat_map,
+                left = 0.01,
+                bottom = 0.65,
+                right = 0.5,
+                top = 0.95)
 
+# Set up data to create a pie chart depicting how many samples are paired 
 datpie23 <- data.frame('Category' = c('Total samples', 'Paired samples'),
                      'Proportion' = c((nrow(lw_data %>% filter(year == 2023))-nrow(lw_paired %>% filter(year == 2023)))/nrow(lw_data %>% filter(year == 2023))*100,
                                       nrow(lw_paired %>% filter(year == 2023))/nrow(lw_data %>% filter(year == 2023))*100))
