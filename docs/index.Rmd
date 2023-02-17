@@ -11,7 +11,7 @@ output: html_document
   
 ## Analysis pages:
  
-<a href="https://ssalois1.github.io/ILXSM/ilxsm_stats_and_maps.html" target="_blank"> ILXSM - last updated February 17 2023 </a>
+<a href="https://ssalois1.github.io/ILXSM/docs/ilxsm_stats_and_maps.html" target="_blank"> ILXSM - last updated February 17 2023 </a>
   
   
   
