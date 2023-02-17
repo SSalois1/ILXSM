@@ -1,0 +1,17 @@
+---
+title: "ILXSM Analysis"
+author: "Sarah Salois"
+output: html_document
+---
+<button>
+    <a href="https://github.com/SSalois1/ILXSM"> ILXSM Data Analysis Repo </a>
+</button>
+ 
+  <!-- ADD LINKS BELOW, note, using the RMD link syntax will open the presentation in the same tab, which is annoying. Use the html with the "_blank" to fix that behavior --> 
+  
+## Analysis pages:
+ 
+<a href="https://ssalois1.github.io/preliminary_results/ilxsm_stats_and_maps.html" target="_blank"> ILXSM - last updated February 17 2023 </a>
+  
+  
+  
