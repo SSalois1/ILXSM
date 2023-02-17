@@ -16,4 +16,7 @@
 
 # local folders
 /data
->>>>>>> 7f392ecc785c3ae8a1aa5a0474e58b8928330119
+/shapefiles
+
+# confidental data files
+*.csv
