@@ -1,0 +1,248 @@
+---
+title: "merge_weights"
+author: "Sarah Salois"
+output:
+ html_document:
+    code_fold: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages & Data wrangling
+
+Below, I pull in data from the Lisa Hendrickson via the Research Track Working 
+Group and Thomas Swaider via the ILXSM project. 
+
+```{r, warning=FALSE, message=FALSE}
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+# Data files
+# This is the data Lisa Hendrickson provided to the working group
+bw <- read.csv('illex_bodywts.csv')
+# This is ILXSM data I wrangled and saved in file called 'plot_lw_figures.R'
+df_full <- read.csv('ilxsm_weights_lengths.csv')
+# dat is a subset of the ilxsm data where I select just paired data
+dat <- df_full[!is.na(c(df_full$lengths & df_full$weights )), ]
+# Fix date and add a few new time-related variables
+bw$DATE <- as.Date(bw$DATE)
+bw <- bw %>%
+  mutate(year = year(DATE),
+         month = month(DATE),
+         week = week(DATE), 
+         day = day(DATE)) %>%
+  as.data.frame()
+# Isolate FV/DARANA to examine data
+darana <- bw %>% filter(HULLNUM == 536245)
+# DARANA vessel id = JAZL 
+# wrangle ILXSM data to merge with Lisa's data for DARANA
+darana2 = dat %>% filter(vessel_id == 'JAZL') %>% 
+  rename(DATE = LAND_DATE, 
+         BODYWT = weights) %>% 
+  mutate(month = month(DATE),
+         day = day(DATE))
+darana2$HULLNUM <- 536245
+darana2 <- darana2 %>% select('HULLNUM', "DATE", 'BODYWT',
+                              'year','month', 'week', 'day')
+
+darana9922 <- rbind(darana, darana2)
+
+# Let's add all ILXSM data together 
+ilxsmdf <- df_full %>%
+  select('year', 'week', 'LAND_DATE', 'weights', 
+         'VESSEL_NAME.x','vessel_id', 'hold_type') %>% 
+  rename(DATE = LAND_DATE, 
+         BODYWT = weights) %>% 
+  mutate(month = month(DATE),
+         day = day(DATE)) 
+
+# Find/extract/pair the hullnum to vessel name from CFDBS_vessels_1997-2019 file
+
+v.ids <- read.csv('CFDBS_vessels_1997-2019.csv')
+
+ilxsmdf$HULLNUM <- NA
+uvn <- sort(unique(ilxsmdf$VESSEL_NAME.x))
+
+for (i in 1:length(uvn)){
+  a <- subset(v.ids, VESSNAME == uvn[i])
+  locs <- which(ilxsmdf$VESSEL_NAME %in% a$VESSNAME)
+  ilxsmdf[locs,10] <- a[1,3]
+}
+
+
+# Get this ready to merge
+ilxsmdf2 <- ilxsmdf %>% select('HULLNUM', "DATE", 'BODYWT',
+                              'year','month', 'week', 'day')
+
+
+# merge ilxsm data to Lisa's
+bwts <- rbind(bw, ilxsmdf2)
+
+
+## Now add permits & vessel name just to be thorough for comparing data later 
+bwts$permit <- NA
+bwts$vessel_name <- NA
+
+for (i in 1:length(uvn)){
+  a <- subset(v.ids, VESSNAME == uvn[i])
+  locs <- which(bwts$HULLNUM %in% a$HULLNUM)
+  bwts[locs,8] <- a[1,2]
+  bwts[locs,9] <- a[1,4]
+  
+}
+
+
+```
+
+## Plotting 
+
+Looking at patterns in Illex catch weight for the vessel DARANA
+
+```{r, warning=FALSE, message=FALSE}
+# Just DARANA
+ggplot(darana9922, aes(x = factor(year), y = BODYWT)) + 
+    labs(x = 'Year',
+         y = 'Weight (g)',
+         title = 'Darana') +
+    theme_classic() +
+    guides(fill=guide_legend(title=NULL))+
+    geom_boxplot()
+# ggsave(path = here::here('results'),'Darana_weights.jpg', 
+#        width = 8, height = 3.75, units = "in", dpi = 300)
+
+```
+
+
+Merged the data made available to the Illex RT working group by Lisa 
+Hendrickson and the data from the ILXSM project to view patterns of Illex 
+weight over time 
+
+```{r, warning=FALSE, message=FALSE}
+# All weights (Lisa + ILXSM)
+ggplot(bwts, aes(x = factor(year), y = BODYWT)) + 
+  labs(x = 'Year',
+       y = 'Weight (g)') +
+  theme_classic() +
+  guides(fill=guide_legend(title=NULL))+
+  geom_boxplot()
+# ggsave(path = here::here('results'),'all_weights.jpg', 
+#        width = 8, height = 3.75, units = "in", dpi = 300)
+
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+# All weights (Lisa + ILXSM) ordered by median
+p1 = ggplot(bwts, 
+       aes(x = reorder(factor(year),BODYWT, median, na.rm = TRUE), y = BODYWT, 
+           fill = factor(year))) + 
+  labs(x = 'Year',
+       y = 'Weight (g)', 
+       title = 'Illex body weights (WG + ILXSM)',
+       subtitle = 'Ordered by median') +
+  theme_classic() +
+  guides(fill = FALSE)+
+  geom_boxplot()
+# ggsave(path = here::here('results'),'all_weights_median.jpg', 
+#        width = 8, height = 3.75, units = "in", dpi = 300)
+p2 = ggplot(bwts, 
+       aes(x = reorder(factor(year),BODYWT, mean, na.rm = TRUE), y = BODYWT, 
+           fill = factor(year))) + 
+  labs(x = 'Year',
+       y = 'Weight (g)', 
+       title = 'Illex body weights (WG + ILXSM)',
+       subtitle = 'Ordered by mean') +
+  theme_classic() +
+  guides(fill = FALSE)+
+  geom_boxplot()
+# ggsave(path = here::here('results'),'all_weights_mean.jpg', 
+#        width = 8, height = 3.75, units = "in", dpi = 300)
+
+
+
+#p1/p2
+
+```
+
+
+
+
+
+
+```{r, warning=FALSE, message=FALSE}
+p1
+```
+
+
+
+
+
+
+```{r, warning=FALSE, message=FALSE}
+p2
+```
+
+## Time series
+
+```{r, warning=FALSE, message=FALSE}
+
+
+bw_tally <- bwts %>% 
+  group_by(year) %>%
+  summarise(mean.wt = mean(na.omit(BODYWT)), 
+            sd.wt = sd(na.omit(BODYWT)), 
+            max.wt = max(na.omit(BODYWT)),
+            min.wt = min(na.omit(BODYWT)),
+            n = length(na.omit(BODYWT)))
+yrs = unique(bw_tally$year)
+
+```
+
+
+Visualizing the time series and applying a trend analysis. Since this is a 
+relatively short time series (23 years), the function from geom_gls() from 
+ecodata will not work. This function fits four trend models to each time series,
+uses AICc to select the best model fit, and then implements a likelihood-ratio 
+test to determine if a trend is present. If a significant trend is 
+present (P < 0.05), then the trend line is plotted with the series.
+By default, a purple line color is assigned to negative trends and 
+orange to positive trends. 
+More details on this function [here](https://noaa-edab.github.io/tech-doc/trend-analysis.html) 
+
+```{r, warning=FALSE, message=FALSE}
+
+ggplot(bw_tally, aes(x = year, y = mean.wt)) +
+  geom_line() +
+  #geom_smooth() +
+  ecodata::geom_gls() +
+  # xlim(1997,2022) +
+  # scale_x_continuous(breaks = function(range) seq(yrs[1], yrs[23], by = 1))+
+  theme_bw()
+```
+
+Adding in a LOESS (Locally Weighted Scatterplot Smoothing) trend line. LOESS
+is non-parametric regression technique
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(bw_tally, aes(x=year, y= mean.wt)) +
+  geom_point() +
+  geom_smooth() +
+  theme_bw()
+```
+
+
+
+
+
+
+
+
