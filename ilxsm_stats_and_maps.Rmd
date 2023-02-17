@@ -852,7 +852,7 @@ for (i in 1:length(uvn)){
 
 Quick overview of data: 
 
-+ Weight range: **`r min(bwts$BODY_WT)`** grams to **`r max(bwts$BODY_WT)`** grams
++ Weight range: **`r min(bwts$BODYWT)`** grams to **`r max(bwts$BODYWT)`** grams
 + Year range: **`r range(bwts$year)`**
 + Week range: **`r range(bwts$week)`**
 
