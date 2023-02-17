@@ -32,6 +32,7 @@ library(patchwork)
 library(ggridges)
 library(patchwork)
 library(ggpubr)
+library(readxl)
 
 ```
 
@@ -134,7 +135,8 @@ for (i in 1:length(stat_areas$area_code)){
   lw_tally_full[locs,3] <- b$lat
   lw_tally_full[locs,4] <- c$lon
 }
-# Remove rows with placeholders for 0, 500, 600, 610, 620 since they are not specific to a unique stat area
+# Remove rows with placeholders for 0, 500, 600, 610, 620 since they are not
+# specific to a unique stat area
 lw_tally <- lw_data %>% 
   group_by(AREA_CODE, year) %>%
   summarise(n = length(ORGANISM_ID))
@@ -185,6 +187,56 @@ lw_paired <- lw_paired %>%
          month = lubridate::month(LAND_DATE),
          week = lubridate::week(LAND_DATE), 
          day = lubridate::day(LAND_DATE))
+
+## -- Add in permit, vesshold type and HULLNUM for linking to other data -- ##
+
+
+### ----vessel hold type------------------------ ###
+setwd(here::here('data/'))
+vesshold <- read_excel("vessel_type_2021.xlsx",
+                       sheet = "vessel_type") %>%
+  rename(VESSHOLD = Vess_type_Final, 
+         VESSEL_NAME = VESSNAME) %>%
+  mutate(VESSHOLD = str_to_upper(VESSHOLD))
+
+vesshold %>% filter(!(VESSHOLD %in% c("ICE", "FT", "RSW"))) %>% 
+  dplyr::select("PERMIT", "COMMENT")
+
+  lw_paired <- lw_paired %>%
+  left_join(vesshold, by = 'VESSEL_NAME') %>%
+  droplevels()
+
+  lw_paired$VESSHOLD <- ifelse((lw_paired$PERMIT == 410371 & lw_paired$year <= 2020),
+                             "FT", lw_paired$VESSHOLD)
+  lw_paired$VESSHOLD <- ifelse((lw_paired$PERMIT == 410371 & lw_paired$year > 2020), 
+                             "RSW", lw_paired$VESSHOLD)
+  lw_paired$VESSHOLD <- ifelse((lw_paired$PERMIT == 410403 & lw_paired$year <= 2016), 
+                             "FT", lw_paired$VESSHOLD)
+  lw_paired$VESSHOLD <- ifelse((lw_paired$PERMIT == 410403 & lw_paired$year > 2016), 
+                             "RSW", lw_paired$VESSHOLD)
+  
+  lw_paired$fleet <- ifelse(lw_paired$VESSHOLD == 'FT', yes = 'FREEZE', no = NA)  
+  lw_paired$fleet <- ifelse(lw_paired$VESSHOLD %in% c('ICE', 'RSW'),
+                          yes = 'WET', no = lw_paired$fleet)  
+
+## remove extraneous columns, re-order if necessary 
+lw_paired <- lw_paired[,-c(14:17)]
+
+# This part attempts to add in HULLNUM ** but it should be noted that HULLNUM
+# listed in the vessel id data set (see line 831 below, file: 
+# v.ids=CFDBS_vessels_1997-2019.csv) changes over the years as does the Permit 
+# numbers and they don't necessarily line up with the "vessel_type_2021.xlsx"
+# document. This likely needs further attention in the future - I will ask 
+# someone who has more information on the structure of these data sets 
+# and related fields 
+
+# uvn <- sort(unique(lw_paired$VESSEL_NAME))
+# lw_paired$HULLNUM <- NA
+# for (i in 1:length(uvn)){
+#   a <- subset(v.ids, VESSNAME == uvn[i])
+#   locs <- which(lw_paired$VESSEL_NAME %in% a$VESSNAME)
+#   lw_paired[locs,15] <- a[1,3]
+# }
 
 ```
 
@@ -741,8 +793,6 @@ Hendrickson and the data from the ILXSM project to view patterns of Illex
 weight over time. 
 
 
-
-
 ```{r}
 
 setwd(here::here('data'))
@@ -957,20 +1007,20 @@ g + theme(axis.text = element_text(size = 10),
 ### Size frequency analysis
 
 Following work by Paul Rago, size samples from ILXSM were used to illustrate
-the potential use of a weight vs age curve. Weight (W) as a function of age (A) 
+the potential use of a weight vs age curve. 
+
+From Rago_21 Methods: Weight (W) as a function of age (A) 
 was modeled in Hendrickson and Hart as $$ W = \alpha Age^{\beta} $$, where 
 $$ \alpha = 1.12 * 10^{-6} $$ and $$ \beta = 3.60 $$. These parameters were
 used to describe both male and female Illex combined, but the authors noted 
 that sex specific differences did occur. The inverse of the weight at age 
-function can be written as: $$ Age_{t} = (W_{t} /\alpha)^{1/\beta} $$
-
-$$ Age = W_{t+1} = α(Age_{t} + 7 days)^{β} $$. Together these
-functions can be used to compute the projected growth of a cohort sampled by the 
-fishery in any given week. The projected growth of an squid of size W(t) to
-size W(t+1) in week t+1 was obtained by first estimating its age in days, then
-adding 7 days to project it to the next week.  
-
-
+function can be written as: Together these functions can be used to compute the projected growth of a cohort sampled
+by the fishery in any given week. The projected growth of an squid of size 
+$$ W_{t} $$ to size $$ W_{t+1} $$ in week $ t+1 $ was obtained by first estimating its age in days, then adding 7 days to project it to the next week.  
+ $$ Age_{t} = (W_{t} /\alpha)^{1/\beta} $$, thus the projected weight at time 
+ $ t $ is :  $$ W_{t+1} = \alpha(Age_{t}+ 7 days)^{\beta} $$
+The above equations can be used to compute the projected growth of a squid at 
+time $ t $ over times $ t + 1 $,$ t + 2 $,$ t + 3 $, etc.   
 ```{r}
 library(contourPlot)
 library(TAM)
@@ -1094,10 +1144,15 @@ for (i in year.seq){
 
 ```
 
+Results/Conclusions: 
+
+
+
 ## Relative Condition
 
 Relative condition (Kn) = W/W`
-where W` is the predicted length-specific mean weight for the fish population in a given region
+where W` is the predicted length-specific mean weight for the fish population in
+a given region
 
 ```{r}
 # Two types of condition estimates
@@ -1119,7 +1174,7 @@ lw_paired$fk <- 100 * (lw_paired$weight/(lw_paired$length^3))
 
 
 
-g= ggplot(lw_paired, 
+g  = ggplot(lw_paired, 
             aes(x = factor(AREA_CODE), y = Kn, fill = as.factor(year)))+ 
   labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
        title = 'Relative Condition:Kn') +
@@ -1133,14 +1188,80 @@ g= ggplot(lw_paired,
 g + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
         axis.ticks.length = unit(-1.4, "mm"))   
+```
 
+
+Condition of catch within Freezer Trawler and Wet Boat fleets across years:  
+
+```{r}
 ## ------ NOTE -------- ##
-# Look at relative condition by week or month 
+# Look at relative condition by week or month and by fleet 
+# For some of the fleet info - there are NA's 
+# unique(lw_paired$fleet)
+# Remove NAs: 
+check = na.omit(lw_paired)
+
+g = ggplot(check, 
+            aes(x = factor(fleet), y = Kn, fill = as.factor(year)))+ 
+  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
+       title = 'Relative Condition:Kn') +
+  theme_classic() +
+  guides(fill=guide_legend(title=NULL))+
+  geom_hline(yintercept = 1, lty = 2) +
+  ylim(0,2) +
+  geom_boxplot() + 
+   scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
+  ecodata::theme_ts()
+
+g + theme(axis.text = element_text(size = 10), 
+        axis.title = element_text(size = 10),
+        axis.ticks.length = unit(-1.4, "mm"))   
+```
+
+Condition of catch during fishing season across years:  
+
+
+```{r}
+g1 = ggplot(lw_paired %>% filter(week %in% c(20:40)), 
+            aes(x = factor(week), y = Kn, fill = as.factor(year)))+ 
+  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
+       title = 'Fishing Season Relative Condition:Kn') +
+  theme_classic() +
+  guides(fill=guide_legend(title=NULL))+
+  geom_hline(yintercept = 1, lty = 2) +
+  ylim(0,2) +
+  geom_boxplot() + 
+  scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
+  ecodata::theme_ts()
+
+g1 + theme(axis.text = element_text(size = 10), 
+        axis.title = element_text(size = 10),
+        axis.ticks.length = unit(-1.4, "mm"))   
+
+
+g2 = ggplot(lw_paired %>% filter(week %in% c(2:19, 41:51)), 
+            aes(x = factor(week), y = Kn, fill = as.factor(year)))+ 
+  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
+       title = 'Non-fishinig Season: Relative Condition:Kn') +
+  theme_classic() +
+  guides(fill=guide_legend(title=NULL))+
+  geom_hline(yintercept = 1, lty = 2) +
+  ylim(0,2) +
+  geom_boxplot() + 
+   scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
+  ecodata::theme_ts()
+
+g2 + theme(axis.text = element_text(size = 10), 
+        axis.title = element_text(size = 10),
+        axis.ticks.length = unit(-1.4, "mm"))   
+
+
+```
 
 
 
 
-
+```{r}
 # # Here I used mean weight of population (not length specific)
 # g0 = ggplot(dat, 
 #             aes(x = factor(AREA_CODE), y = pop_kn, fill = as.factor(year)))+ 
@@ -1338,14 +1459,6 @@ g + theme(axis.text = element_text(size = 10),
 #   guides(fill=guide_legend(title=NULL))+
 #   geom_boxplot()
 ```
-
-
-
-
-
-
-
-
 
 
 
