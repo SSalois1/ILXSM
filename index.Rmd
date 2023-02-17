@@ -1,7 +1,6 @@
 ---
 title: "ILXSM Analysis"
 author: "Sarah Salois"
-date: "2/17/2023"
 output: html_document
 ---
 <button>
@@ -12,7 +11,7 @@ output: html_document
   
 ## Analysis pages:
  
-<a href="https://ssalois1.github.io/preliminary_results/ilxsm_stats_and_maps.html" target="_blank"> ILXSM - last updated February 16 2023 </a>
+<a href="https://ssalois1.github.io/preliminary_results/ilxsm_stats_and_maps.html" target="_blank"> ILXSM - last updated February 17 2023 </a>
   
   
   

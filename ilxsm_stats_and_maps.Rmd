@@ -2,9 +2,6 @@
 title: "ILXSM stats and maps"
 author: "Sarah Salois"
 output:
-  pdf_document:
-    toc: yes
-    toc_depth: '3'
   html_document:
     code_fold: hide
     toc: yes
@@ -573,6 +570,7 @@ p + theme(axis.text = element_text(size = 10),
 
 In 2021 there were a total of **`r sum(subset(lw_tally, year == 2021, select = n))`**
 organisms measured across **`r length(unique(lw21$AREA_CODE))`** statistical areas. 
+
 ```{r}
 g = ggplot(data = lw_tally %>% filter(year==2021), 
        aes(x = factor(AREA_CODE), y = n)) +
@@ -726,6 +724,7 @@ ggplot(wt_full %>% filter(year == 2022), aes(x = weight, y = factor(week),
 
 In 2023 there were a total of **`r sum(subset(lw_tally, year == 2023, select = n))`**
 organisms measured across **`r length(unique(lw23$AREA_CODE))`** statistical areas. 
+
 ```{r}
 g = ggplot(data = lw_tally %>% filter(year==2023), 
            aes(x = factor(AREA_CODE), y = n)) +
@@ -975,53 +974,29 @@ g + theme(axis.text = element_text(size = 10),
 
 
 
-```{r}
-# Calculate new coeffients with current data
-# run regression
-# mod <-lm(log(lw_paired$weight)~log(lw_paired$length/10))
-# # Extract coefficients
-# coef(mod) # intercept (alpha) and slope (beta) of the line 
-# # intercept is -2.300349 and the slope  2.463418 (cm)
-# # Back transform alpha
-# # e = 2.7182818
-# # e^-2.300349 
-# exp(-2.300349) 
-
-g = ggplot(lw_paired, aes(x=length, y=weight)) + 
-  geom_point() +
-  geom_smooth(method=lm) + 
-  ecodata::theme_ts() 
-
-g + theme(axis.text = element_text(size = 10), 
-        axis.title = element_text(size = 10),
-        axis.ticks.length = unit(-1.4, "mm"))   
-
-# ggplot(lw_paired, aes(x=log(length/10), y=log(weight))) + 
-#   geom_point()+
-#   geom_smooth(method=lm) + 
-#   theme_bw()
-
-```
-
 
 ### Size frequency analysis
 
 Following work by Paul Rago, size samples from ILXSM were used to illustrate
 the potential use of a weight vs age curve. 
 
-From Rago_21 Methods: Weight (W) as a function of age (A) 
-was modeled in Hendrickson and Hart as $$ W = \alpha Age^{\beta} $$, where 
-$$ \alpha = 1.12 * 10^{-6} $$ and $$ \beta = 3.60 $$. These parameters were
-used to describe both male and female Illex combined, but the authors noted 
-that sex specific differences did occur. The inverse of the weight at age 
-function can be written as: Together these functions can be used to compute the projected growth of a cohort sampled
-by the fishery in any given week. The projected growth of an squid of size 
-$$ W_{t} $$ to size $$ W_{t+1} $$ in week $ t+1 $ was obtained by first estimating its age in days, then adding 7 days to project it to the next week.  
- $$ Age_{t} = (W_{t} /\alpha)^{1/\beta} $$, thus the projected weight at time 
- $ t $ is :  $$ W_{t+1} = \alpha(Age_{t}+ 7 days)^{\beta} $$
-The above equations can be used to compute the projected growth of a squid at 
-time $ t $ over times $ t + 1 $,$ t + 2 $,$ t + 3 $, etc.   
+
 ```{r}
+
+# From Rago_21 Methods: Weight (W) as a function of age (A) 
+# was modeled in Hendrickson and Hart as $$ W = \alpha Age^{\beta} $$, where 
+# $$ \alpha = 1.12 * 10^{-6} $$ and $$ \beta = 3.60 $$. These parameters were
+# used to describe both male and female Illex combined, but the authors noted 
+# that sex specific differences did occur. The inverse of the weight at age 
+# function can be written as: Together these functions can be used to compute the projected growth of a cohort sampled
+# by the fishery in any given week. The projected growth of an squid of size 
+# $$ W_{t} $$ to size $$ W_{t+1} $$ in week $ t+1 $ was obtained by first estimating its age in days, then adding 7 days to project it to the next week.  
+#  $$ Age_{t} = (W_{t} /\alpha)^{1/\beta} $$, thus the projected weight at time 
+#  $ t $ is :  $$ W_{t+1} = \alpha(Age_{t}+ 7 days)^{\beta} $$
+# The above equations can be used to compute the projected growth of a squid at 
+# time $ t $ over times $ t + 1 $,$ t + 2 $,$ t + 3 $, etc.   
+
+
 library(contourPlot)
 library(TAM)
 library(Hmisc)
@@ -1150,6 +1125,42 @@ Results/Conclusions:
 
 ## Relative Condition
 
+Condition estimates often based on length-weight relationships. Below is a
+plot of the the length weight relationship between all paired samples from 
+the ILXSM data. 
+
+Regression coefficients were estimated from this current data set
+in effort to compare to length-weight relationships based on 1978 Lange and Johnson study.
+
+```{r}
+# Calculate new coeffients with current data
+# run regression
+# mod <-lm(log(lw_paired$weight)~log(lw_paired$length/10))
+# # Extract coefficients
+# coef(mod) # intercept (alpha) and slope (beta) of the line 
+# # intercept is -2.300349 and the slope  2.463418 (cm)
+# # Back transform alpha
+# # e = 2.7182818
+# # e^-2.300349 
+# exp(-2.300349) 
+
+g = ggplot(lw_paired, aes(x=length, y=weight)) + 
+  geom_point() +
+  geom_smooth(method=lm) + 
+  ecodata::theme_ts() 
+
+g + theme(axis.text = element_text(size = 10), 
+        axis.title = element_text(size = 10),
+        axis.ticks.length = unit(-1.4, "mm"))   
+
+# ggplot(lw_paired, aes(x=log(length/10), y=log(weight))) + 
+#   geom_point()+
+#   geom_smooth(method=lm) + 
+#   theme_bw()
+
+```
+
+
 Relative condition (Kn) = W/W`
 where W` is the predicted length-specific mean weight for the fish population in
 a given region
@@ -1183,7 +1194,8 @@ g  = ggplot(lw_paired,
   geom_hline(yintercept = 1, lty = 2) +
   ylim(0,2) +
   geom_boxplot() + 
-  ecodata::theme_ts()
+  scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
+ ecodata::theme_ts()
 
 g + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
