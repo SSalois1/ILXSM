@@ -1,2 +1,19 @@
+# History files
+.Rhistory
+.Rapp.history
 
+<<<<<<< HEAD
 .Rproj.user
+=======
+# Session Data files
+.RData
+
+# User-specific files
+.Ruserdata
+
+# RStudio files
+.Rproj.user/
+
+# local folders
+/data
+>>>>>>> 7f392ecc785c3ae8a1aa5a0474e58b8928330119
