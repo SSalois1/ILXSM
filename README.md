@@ -9,6 +9,8 @@ In order to acquire high frequency, region-wide size and weight data of shortfin
 
 
 
+This [document](https://ssalois1.github.io/ILXSM/ilxsm_stats_and_maps.html) serves as an overview of the available data and will be updated as new reports are generated from the Cooperative Research Branch. 
+
 
 
 For more information or to contact us, visit the [Cooperative Research Science and Data Page](https://www.fisheries.noaa.gov/new-england-mid-atlantic/science-data/cooperative-research-northeast#shortfin-squid-electronic-size-monitoring)
