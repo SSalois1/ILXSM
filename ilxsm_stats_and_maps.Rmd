@@ -113,7 +113,6 @@ stat_areas <- data.frame(area_code = sort(unique(lw_data$AREA_CODE)),
                                  -73.5, -72.5, -71.0,-74.5,
                                  -75.25, -74.5, -73.5))
 
-
 # Note, that I substituted zeros for the stat areas 0 and 600, so that I can keep
 # those mixed areas for tallying the number of measurements. These can later be 
 # removed for analyses depending on the question at hand. 
@@ -272,7 +271,7 @@ The full data set has **`r sum(lw_tally_full$n)`** data entries,
 from **`r length(unique(lw_tally$AREA_CODE))`** different statistical areas, 
 across **`r length(unique(lw_tally$year))`** years. Of the 196452 data entries 
 across all years, there are paired length and weight measurements for a total of **`r nrow(lw_paired %>% filter(year == 2021))+nrow(lw_paired %>% filter(year == 2022))+nrow(lw_paired %>% filter(year == 2023))`** individuals. 
-individuals. At the time of this report, the number of individual squid with 
+At the time of this report, the number of individual squid with 
 paired measurements for each year is as follows: 
 
  + 2021: `r nrow(lw_paired %>% filter(year == 2021))`
@@ -286,7 +285,7 @@ The number of squid measured at each site are shown below for each year:
 ggplot(lw_tally_by_week, aes(x = week, y = n, color = factor(year))) + 
   geom_line(cex = 1) +
   geom_point(size = 1) +
-  labs(x = 'Week', y = 'Number of samples (n)') +
+  labs(x = 'Week of Year', y = 'Number of samples (n)') +
   labs(color = 'Year') +
   scale_color_manual(values=c('gold1','slateblue3','violetred1'))+
   ecodata::theme_facet()+
@@ -296,7 +295,7 @@ ggplot(data = lw_tally, aes(x = factor(AREA_CODE), y = n,
                             fill = factor(year))) +
   geom_bar(stat ='identity', position = position_dodge(), color = 'black') +
   scale_fill_manual(values=c('gold1','slateblue3','violetred1')) +
-  labs(x = 'Week', y = 'Number of samples (n)') +
+  labs(x = 'Statistical Area', y = 'Number of samples (n)') +
   labs(fill = 'Year') +
   ecodata::theme_ts()
        
@@ -306,9 +305,16 @@ ggplot(data = lw_tally, aes(x = factor(AREA_CODE), y = n,
 
 ```
 
-Here is a map of the statistical areas from which organisms were sampled across
-all years available in data set. The size of the data point is representative 
-of the number of samples recorded in each statistical area. 
+> Here are some maps highlighting the statistical areas from which squid
+were sampled.
+
+
++ The first figure depicts the boundaries of the Greater Atlantic Region 
+Statistical Areas from which Illex samples have been reported to the ILXSM database.
+
++ The second figure indicates the amount of samples reported for each statistical 
+area. The size of the data point is representative of the number of samples recorded that particular area. Note this map is cumulative, it summarizes total 
+samples in each stat area across all available years. 
 
 ```{r}
 ## Bring in shapefiles
@@ -356,6 +362,8 @@ cnames <- aggregate(cbind(long, lat) ~ id, data=shp_df, FUN=mean)
 cnames[1,c(2,3)] <- c(-69.50, 40.50)
 cnames[3,c(2,3)] <- c(-70.75, 40.50)
 cnames[5,c(2,3)] <- c(-66.75, 41.25)
+cnames[8,c(2,3)] <- c(-74.5, 38.5)
+cnames[13,c(2,3)] <- c(-75.25, 36.5)
 stat_map_no_lab =  ggplot() + geom_polygon(data = stat_areas2,
                                aes(x = long, y = lat, group = group), 
                                colour = "black", fill = NA) + theme_void() 
@@ -367,6 +375,18 @@ stat_map = stat_map_no_lab + geom_text(data = cnames,
   coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,42.3), 
            datum = sf::st_crs(4326)) 
 
+# version 2 (stat_map.v2) has larger labels than stat_map, which needs
+# smaller values to be legible inside a bar plot
+stat_map.v2 = stat_map_no_lab + geom_text(data = cnames, 
+                                aes(x = long, y = lat, label = id), 
+                                size = 4) + 
+  geom_sf(data = US.areas %>% st_as_sf() ,
+          color = 'gray20', fill = 'wheat3') +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,42.3), 
+           datum = sf::st_crs(4326)) 
+stat_map.v2
+# ggsave(path = here::here('figures'),'stat_areas.jpeg',
+#        width = 6, height = 3.75, units = "in", dpi = 300)
 
 ## -- Back to points of interest for the main detailed map below -- ##
 
@@ -458,7 +478,7 @@ p2 + theme(axis.text = element_text(size = 10),
 ```
 
 
-Comparisons of mean length and mean weight across years: 
+> Comparisons of mean length and mean weight across years: 
 
 
 ```{r}
@@ -836,6 +856,8 @@ Merged the data made available to the Illex RTA Working Group by Lisa
 Hendrickson and the data from the ILXSM project to view patterns of Illex 
 weight over time. 
 
++ The data set ranges from 1997-2006 to 2009-2023. There is no data for 
+years 2007 and 2008.
 
 ```{r}
 
@@ -902,10 +924,13 @@ Quick overview of data:
 + Week range: **`r range(bwts$week)`**
 
 
-### Boxplots:
+### Boxplots
 
-The first boxplot figure is ordered by year and the second boxplot figure is 
-ordered by median. 
++ The first boxplot figure is ordered by year 
++ The second boxplot figure is ordered by median. 
+
+*Note: To better fit all years on the x-axis only the last two digits of each* 
+*year are labeled. For example, 1997 is labeled '97' and 2019 is labeled '19'*
 ```{r}
 
 # All weights (Lisa + ILXSM)
@@ -916,7 +941,13 @@ g1 = ggplot(bwts, aes(x = factor(year), y = BODYWT)) +
   theme_classic() +
   guides(fill=guide_legend(title=NULL))+
   geom_boxplot() +
-  ecodata::theme_ts() 
+  ecodata::theme_ts() +
+  scale_x_discrete(
+    breaks = c(1997:2006, 2009:2023), 
+    labels = c('97', '98', '99', '00', '01', '02', '03', '04', '05', '06',
+               '09', '10', '11', '12', '13', '14', '15', '16', '17', '18',
+               '19', '20', '21', '22', '23')
+  ) 
 
 g1 + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
@@ -935,7 +966,13 @@ g2 = ggplot(bwts,
   theme_classic() +
   guides(fill=guide_legend(title=NULL))+
   geom_boxplot() + 
-  ecodata::theme_ts()
+  ecodata::theme_ts() + 
+  scale_x_discrete(
+    breaks = c(1997:2006, 2009:2023), 
+    labels = c('97', '98', '99', '00', '01', '02', '03', '04', '05', '06',
+               '09', '10', '11', '12', '13', '14', '15', '16', '17', '18',
+               '19', '20', '21', '22', '23')
+  ) 
 g2 + theme(axis.text = element_text(size = 10), 
         axis.title = element_text(size = 10),
         axis.ticks.length = unit(-1.4, "mm")) 
@@ -1022,8 +1059,8 @@ g + theme(axis.text = element_text(size = 10),
 
 ### Size frequency analysis
 
-Following work by Paul Rago, size samples from ILXSM were used to illustrate
-the potential use of a weight vs age curve. 
+Extending work by Paul Rago in 2021, size samples from Lisa's data and 
+ILXSM were used to illustrate the potential use of a weight vs age curve. 
 
 
 ```{r}
@@ -1083,14 +1120,7 @@ ny<-50 #
 
 year.seq<-c(1997:2006, 2010:2019, 2021:2022)
 for (i in year.seq){
-  ### save the plots to a set of png files
-  #name1= paste0(getwd(),"/weight.plots.")
-  # num=iyear   
-  # ext = ".png"  
-  #  path3 = paste0(name1,num,ext)  
-  #  png(file=path3) 
   tmp <- df %>% filter(year == i)
- # iyear<-2022
   yy<-interp(tmp$week,
              tmp$BODYWT,
              tmp$freq,
@@ -1145,8 +1175,7 @@ for (i in year.seq){
 ```
 
 
-Adjusting birth week frequencies for natural mortality. This uses an M of 0.06, 
-this may need to be adjusted/updated. 
+Adjusting birth week frequencies for natural mortality. Note: This uses an M of 0.06, this may need to be adjusted/updated. 
 
 
 ```{r}
@@ -1170,12 +1199,13 @@ Results/Conclusions:
 
 ## Relative Condition
 
-Condition estimates often based on length-weight relationships. Below is a
-plot of the the length weight relationship between all paired samples from 
+Condition estimates are often based on length-weight relationships. Below is a
+plot of the the length-weight relationship between all paired samples from 
 the ILXSM data. 
 
 Regression coefficients were estimated from this current data set
-in effort to compare to length-weight relationships based on 1978 Lange and Johnson study.
+in effort to compare to length-weight relationships based on 1978 Lange and 
+Johnson study.
 
 ```{r}
 # Calculate new coeffients with current data
@@ -1192,6 +1222,8 @@ in effort to compare to length-weight relationships based on 1978 Lange and John
 g = ggplot(lw_paired, aes(x=length, y=weight)) + 
   geom_point() +
   geom_smooth(method=lm) + 
+  xlab('Length') + 
+  ylab('Weight') +
   ecodata::theme_ts() 
 
 g + theme(axis.text = element_text(size = 10), 
@@ -1206,9 +1238,12 @@ g + theme(axis.text = element_text(size = 10),
 ```
 
 
-Relative condition (Kn) = W/W`
-where W` is the predicted length-specific mean weight for the fish population in
-a given region
+> Relative condition (Kn) = W/W',
+where W' is the predicted length-specific mean weight for the fish population in
+a given region.
+
+Regression coefficients used to compute Kn in plots below are 
+based on those identified in 1978 Lange and Johnson study.
 
 ```{r}
 # Two types of condition estimates
@@ -1248,7 +1283,10 @@ g + theme(axis.text = element_text(size = 10),
 ```
 
 
-Condition of catch within Freezer Trawler and Wet Boat fleets across years:  
+> Relative condition by vessel hold type across years. 
+
+'Freeze' represents freezer trawlers and 'Wet' represents vessels with 
+refrigerated sea water or ice holds. 
 
 ```{r}
 ## ------ NOTE -------- ##
@@ -1260,7 +1298,7 @@ check = na.omit(lw_paired)
 
 g = ggplot(check, 
             aes(x = factor(fleet), y = Kn, fill = as.factor(year)))+ 
-  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
+  labs(x = 'Hold Type', y = 'Relative Condition (Kn)',
        title = 'Relative Condition:Kn') +
   theme_classic() +
   guides(fill=guide_legend(title=NULL))+
@@ -1275,14 +1313,17 @@ g + theme(axis.text = element_text(size = 10),
         axis.ticks.length = unit(-1.4, "mm"))   
 ```
 
-Condition of catch during fishing season across years:  
+> Relative condition inside and outside of the fishing season across years:  
 
++ The first plot is during the fishing season window, here estimated as weeks
+20 through 40: 
++ The second plot denotes weeks occurring outside the typical fishing season
 
 ```{r}
 g1 = ggplot(lw_paired %>% filter(week %in% c(20:40)), 
             aes(x = factor(week), y = Kn, fill = as.factor(year)))+ 
-  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
-       title = 'Fishing Season Relative Condition:Kn') +
+  labs(x = 'Week of Year', y = 'Relative Condition (Kn)',
+       title = 'Fishing Season - Relative Condition:Kn') +
   theme_classic() +
   guides(fill=guide_legend(title=NULL))+
   geom_hline(yintercept = 1, lty = 2) +
@@ -1298,8 +1339,8 @@ g1 + theme(axis.text = element_text(size = 10),
 
 g2 = ggplot(lw_paired %>% filter(week %in% c(2:19, 41:51)), 
             aes(x = factor(week), y = Kn, fill = as.factor(year)))+ 
-  labs(x = 'Statistical Area', y = 'Relative Condition (Kn)',
-       title = 'Non-fishinig Season: Relative Condition:Kn') +
+  labs(x = 'Week of Year', y = 'Relative Condition (Kn)',
+       title = 'Non-fishing Season - Relative Condition:Kn') +
   theme_classic() +
   guides(fill=guide_legend(title=NULL))+
   geom_hline(yintercept = 1, lty = 2) +
