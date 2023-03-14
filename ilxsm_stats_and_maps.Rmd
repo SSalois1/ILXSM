@@ -30,6 +30,7 @@ library(ggridges)
 library(patchwork)
 library(ggpubr)
 library(readxl)
+library(ggExtra)
 
 ```
 
@@ -673,7 +674,8 @@ ggplot(datpie21, aes(x="", y=Proportion, fill= factor(Category))) +
 ```
 
 
-
+Density estimates for weight and length data. The three lines corresponding to
+the first (lower quartile), second (median), and third quartile (upper quartile):
 
 ```{r}
 ## -- Quick plots -- ##
@@ -695,7 +697,7 @@ ggplot(wt_full %>% filter(year == 2021), aes(x = weight, y = factor(week),
                       geom = "density_ridges_gradient") +
   labs(title = '2021 Illex Weights',
        x = 'Weight (gm)', y = 'Week') +
-  scale_fill_brewer(name = '', palette = 'YlOrBr') +
+  scale_fill_brewer(name = 'Quartiles', palette = 'YlOrBr') +
   ecodata::theme_ts()
 
 ```
@@ -768,7 +770,7 @@ ggplot(wt_full %>% filter(year == 2022), aes(x = weight, y = factor(week),
                       geom = "density_ridges_gradient") +
   labs(title = '2022 Illex Weights',
        x = 'Weight (gm)', y = 'Week') +
-  scale_fill_brewer(name = '', palette = 'Purples') +
+  scale_fill_brewer(name = 'Quartiles', palette = 'Purples') +
   ecodata::theme_ts()
 
 
@@ -844,7 +846,7 @@ ggplot(wt_full %>% filter(year == 2023), aes(x = weight, y = factor(week),
                       geom = "density_ridges_gradient") +
   labs(title = '2023 Illex Weights',
        x = 'Weight (gm)', y = 'Week') +
-  scale_fill_brewer(name = '', palette = 'PuRd') +
+  scale_fill_brewer(name = 'Quartiles', palette = 'PuRd') +
   ecodata::theme_ts()
 
 ```
@@ -991,6 +993,25 @@ g2 + theme(axis.text = element_text(size = 10),
 #   geom_boxplot()
 # # ggsave(path = here::here('results'),'all_weights_median.jpg', 
 # #        width = 8, height = 3.75, units = "in", dpi = 300)
+
+
+# classic plot :
+g3 <-ggplot(bwts, aes(x = factor(year), y = BODYWT)) + 
+  labs(x = 'Year',
+       y = 'Weight (g)') +
+  geom_boxplot() +
+  geom_point(data = bwts[bwts$BODYWT,], alpha = 0) +
+  ecodata::theme_ts() +
+  guides(fill=guide_legend(title=NULL)) +
+  scale_x_discrete(
+    breaks = c(1997:2006, 2009:2023), 
+    labels = c('97', '98', '99', '00', '01', '02', '03', '04', '05', '06',
+               '09', '10', '11', '12', '13', '14', '15', '16', '17', '18',
+               '19', '20', '21', '22', '23')) 
+
+ggMarginal(g3, type="density")
+
+
 ```
 
 
@@ -1183,6 +1204,7 @@ Adjusting birth week frequencies for natural mortality. Note: This uses an M of 
 M <- 0.06   # natural mortality per week.   To be addressed later
 
 for (i in year.seq){
+  tmp <- df %>% filter(year == i)
   b.week.table<-tapply(tmp$freq* exp(tmp$age.est/7*M),
                        list(tmp$birth.week),
                        sum)
@@ -1236,6 +1258,45 @@ g + theme(axis.text = element_text(size = 10),
 #   theme_bw()
 
 ```
+
+
+
+
+```{r}
+
+ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_hex() +
+  scale_fill_gradientn(colours=r) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  ecodata::theme_ts() +
+
+ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_hex() +
+  scale_fill_gradientn(colours=r) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  ecodata::theme_facet() +
+  facet_wrap(~year)
+
+# ggplot(lw_paired %>% filter(year %in% c(2021,2022)), aes(x=length, y=weight)) +
+#   geom_hex() +
+#   scale_fill_gradientn(colours=r) + 
+#   xlab('Mantle Length (mm)') + 
+#   ylab('Body Weight (g)') + 
+#   ecodata::theme_facet() + 
+#   facet_wrap(~year)
+
+
+```
+
+
+
+
+
+
+
+
 
 
 > Relative condition (Kn) = W/W',
