@@ -31,6 +31,7 @@ library(patchwork)
 library(ggpubr)
 library(readxl)
 library(ggExtra)
+library(wesanderson)
 
 ```
 
@@ -43,12 +44,15 @@ effort to collect paired length and weight data at processing facilities.
 The first step is to read in the most recent data file and load
 necessary packages. 
 
-```{r data}
+```{r data, message=FALSE}
 # sets the working directory where the data lives
 setwd(here::here('data/ilxsm'))
 # Note the previous version was 'ILXSM_Pull_01_25_23.csv'
 # Most updated data from Thomas on 2/14/23
 lw_data <- read.csv('Entire_Database_Pull_ILXSM_2.14.23.csv')
+lw_data <- read.csv('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv')
+
+
 ```
 
 Next step is to wrangle the data a bit to include date variables of interest
@@ -271,13 +275,83 @@ data entries from mixed area 620
 The full data set has **`r sum(lw_tally_full$n)`** data entries,
 from **`r length(unique(lw_tally$AREA_CODE))`** different statistical areas, 
 across **`r length(unique(lw_tally$year))`** years. Of the 196452 data entries 
-across all years, there are paired length and weight measurements for a total of **`r nrow(lw_paired %>% filter(year == 2021))+nrow(lw_paired %>% filter(year == 2022))+nrow(lw_paired %>% filter(year == 2023))`** individuals. 
+across all years, there are paired length and weight measurements for a total of **`r nrow(lw_paired %>% filter(year == 2021))+nrow(lw_paired %>% filter(year == 2022))+nrow(lw_paired %>% filter(year == 2023))`** individuals.
+
+
+The following plots show the breakdown of the number of vessels contributing samples each year and as well as the number of vessels across each of the participating processors 
+
+```{r}
+
+setwd(here::here('data/ilxsm'))
+dat <- read.csv('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv')
+dat <- dat %>%
+  mutate(PARAM_VALUE_NUM = case_when(PARAM_TYPE == 'ML' & UNIT_MEASURE == 'CM' ~ PARAM_VALUE_NUM * 10, 
+                                     PARAM_TYPE == 'ML' & UNIT_MEASURE == 'MM'~ PARAM_VALUE_NUM, 
+                                     PARAM_TYPE == 'WT' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM))
+dat$LAND_DATE <-lubridate::dmy(dat$LAND_DATE)
+dat <- dat %>%
+  mutate(year = lubridate::year(LAND_DATE),
+         month = lubridate::month(LAND_DATE),
+         week = lubridate::week(LAND_DATE), 
+         day = lubridate::day(LAND_DATE))
+dat_tally <- dat %>% 
+  group_by(year) %>%
+  summarise(n_vessels = length(unique(VESSEL_NAME)), 
+            n_stat_areas = length(unique(AREA_CODE)))
+dat_tally2 <- dat %>% 
+  group_by(year, DEALER_NAME) %>%
+  summarise(n_vessels = length(unique(VESSEL_NAME)), 
+            n_stat_areas = length(unique(AREA_CODE)))
+
+
+
+p1 = ggplot(data = dat_tally, aes(x = factor(year), y = n_vessels, 
+                                  fill = factor(year))) +
+  geom_bar(stat ='identity', position = position_dodge(),
+           col = 'black') +
+  ylab('Number of Vessels') +
+  xlab('Year') +
+  labs(fill = 'Year') +
+  scale_fill_grey(start = 0, end = 0.8) + 
+  ecodata::theme_ts()
+
+p1 +  theme(text = element_text(size = 14), 
+                 axis.text = element_text(size = 13), 
+                 axis.title = element_text(size = 15),
+                 axis.ticks.length = unit(-1.4, "mm")) 
+
+p2 = ggplot(data = dat_tally2, aes(x = factor(year), y = n_vessels, 
+                                   fill = factor(DEALER_NAME))) +
+  geom_bar(stat ='identity', position = position_dodge(),
+           col = 'black') +
+  ylab('Number of Vessels') +
+  xlab('Year') +
+  labs(fill = 'Processor/Dealer') +
+  scale_fill_grey(start = 0, end = 0.8) + 
+  ecodata::theme_ts()
+
+p2 +  theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            axis.ticks.length = unit(-1.4, "mm"), 
+            legend.position = c(0.8, 0.65),
+            legend.background = element_rect(fill = "white", color = "black"), 
+            legend.title = element_text(size = 12),
+            legend.text = element_text(size = 8)) 
+
+```
+
+
+
+
+
 At the time of this report, the number of individual squid with 
 paired measurements for each year is as follows: 
 
  + 2021: `r nrow(lw_paired %>% filter(year == 2021))`
  + 2022: `r nrow(lw_paired %>% filter(year == 2022))`
  + 2023: `r nrow(lw_paired %>% filter(year == 2023))`
+
 
 The number of squid measured at each site are shown below for each year:  
 
@@ -301,10 +375,9 @@ ggplot(data = lw_tally, aes(x = factor(AREA_CODE), y = n,
   ecodata::theme_ts()
        
 
-
-
-
 ```
+
+
 
 > Here are some maps highlighting the statistical areas from which squid
 were sampled.
@@ -635,7 +708,7 @@ g = ggplot(data = lw_tally %>% filter(year==2021),
        aes(x = factor(AREA_CODE), y = n)) +
   geom_bar(stat ='identity', fill = 'gold1', col = 'black') + 
   xlab('Statistical Area') + 
-  ylab('Number of organisms measured') +
+  ylab('Number of samples') +
   ecodata::theme_ts() 
 
 
@@ -1263,21 +1336,34 @@ g + theme(axis.text = element_text(size = 10),
 
 
 ```{r}
+# COlor palettes
+rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+r <- rf(32)
+pal <- wes_palette("Zissou1", 21, type = "continuous")
 
 ggplot(lw_paired, aes(x=length, y=weight)) +
   geom_hex() +
   scale_fill_gradientn(colours=r) +
   xlab('Mantle Length (mm)') +
   ylab('Body Weight (g)') +
-  ecodata::theme_ts() +
+  ecodata::theme_ts() 
 
-ggplot(lw_paired, aes(x=length, y=weight)) +
+g2 = ggplot(lw_paired %>% filter(year %in% c(2021,2022)), 
+            aes(x=length, y=weight)) +
   geom_hex() +
-  scale_fill_gradientn(colours=r) +
+  scale_fill_gradientn(colours=pal) +
   xlab('Mantle Length (mm)') +
   ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
   ecodata::theme_facet() +
   facet_wrap(~year)
+ g2 + theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            legend.position = c(0.92, 0.73), # 73
+            legend.background = element_rect(fill = "white", color = "black"), 
+            legend.title = element_text(size = 9),
+            legend.text = element_text(size = 8)) 
 
 # ggplot(lw_paired %>% filter(year %in% c(2021,2022)), aes(x=length, y=weight)) +
 #   geom_hex() +

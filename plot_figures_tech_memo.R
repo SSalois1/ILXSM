@@ -1,8 +1,14 @@
 library(patchwork)
 setwd(here::here('data/'))
+setwd(here::here('data/ilxsm'))
+lw_data <- read.csv('Entire_Database_Pull_ILXSM_2.14.23.csv')
 ptab <- read.csv('Illex_Vessel_Pivot_Tables_Years_Combined.csv')
 setwd(here::here('data/ilxsm'))
 dat <- read.csv('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv')
+dat <- dat %>%
+  mutate(PARAM_VALUE_NUM = case_when(PARAM_TYPE == 'ML' & UNIT_MEASURE == 'CM' ~ PARAM_VALUE_NUM * 10, 
+                                     PARAM_TYPE == 'ML' & UNIT_MEASURE == 'MM'~ PARAM_VALUE_NUM, 
+                                     PARAM_TYPE == 'WT' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM))
 dat$LAND_DATE <-lubridate::dmy(dat$LAND_DATE)
 dat <- dat %>%
   mutate(year = lubridate::year(LAND_DATE),
@@ -33,7 +39,6 @@ p1 = ggplot(data = ptab_stat, aes(x = factor(Year), y = n_vessels,
   ylab('Number of Vessels') +
   xlab('Year') +
   #labs(fill = 'Year') +
-  
   scale_fill_grey(start = 0, end = 0.8) + 
   ecodata::theme_ts()
 
@@ -52,26 +57,28 @@ p2 = ggplot(data = ptab_tally, aes(x = factor(Year), y = n_vessels,
   xlab('Year') +
   labs(fill = 'Processor/Dealer') +
   scale_fill_grey(start = 0, end = 0.8) + 
+  annotate('text', x = 0.5, y = 16, label= '(a)', size = 5) +
   ecodata::theme_ts()
 
-p2 +  theme(text = element_text(size = 14), 
+p2 = p2 +  theme(text = element_text(size = 14), 
             axis.text = element_text(size = 13), 
             axis.title = element_text(size = 15),
             axis.ticks.length = unit(-1.4, "mm"), 
-            legend.position = c(0.8, 0.65),
+            legend.position = c(0.82, 0.85),
             legend.background = element_rect(fill = "white", color = "black"), 
             legend.title = element_text(size = 12),
-            legend.text = element_text(size = 8)) 
+            legend.text = element_text(size = 8))
+  
+  
 
-
-p3 = ggplot(data = ptab_stat, aes(x = factor(Year), y = stat_area$n_stat_areas, 
-                                  fill = factor(Year))) +
+p3 = ggplot(data = ptab_stat, aes(x = factor(Year), y = stat_area$n_stat_areas)) +
   geom_bar(stat ='identity', position = position_dodge(),
-           col = 'black') +
+           col = 'black', fill = 'grey22') +
   ylab('Number of Statistical Areas Sampled') +
   xlab('Year') +
   labs(fill = 'Year') +
-  scale_fill_grey(start = 0, end = 0.8) + 
+  #scale_fill_grey(start = 0, end = 0.8) + 
+  annotate('text', x = 0.5, y = 18, label= '(b)', size = 5) +
   ecodata::theme_ts()
 
 p3 = p3 +  theme(text = element_text(size = 14), 
@@ -79,7 +86,7 @@ p3 = p3 +  theme(text = element_text(size = 14),
             axis.title = element_text(size = 15),
             axis.ticks.length = unit(-1.4, "mm")) 
 
-p1 + p3
+p2 + p3
    
 ### Maps 
 lw_data <- read.csv('Entire_Database_Pull_ILXSM_2.14.23.csv')
@@ -236,3 +243,217 @@ p1 +  theme(text = element_text(size = 14),
             legend.title = element_text(size = 11),
             legend.text = element_text(size = 11)) 
 
+### ---------- Weights and Lengths --------------- ###
+library(tidyverse)
+# changed from dt to ml_wt_22 for app
+wt <- dat %>%
+  filter(PARAM_TYPE == 'WT') %>%
+  rename(weight = PARAM_VALUE_NUM)
+ml <- dat %>%
+  filter(PARAM_TYPE == 'ML') %>%
+  rename(length = PARAM_VALUE_NUM)
+
+
+
+l1 = ggplot(wt %>% filter(year %in% c(2021, 2022)), 
+            aes(x = weight, y = factor(week), fill =  factor(AREA_CODE))) +
+  geom_density_ridges2(alpha = .4, color = 'black',
+                      scale = 2.5, rel_min_height = .01) +
+  labs(x = 'Weight (g)', 
+       y = 'Week', fill = 'Statistical Area') + # title = 'ILXSM Weights', 
+  xlim(0, 400) +
+  theme_ridges() +
+  theme_bw() + 
+  facet_wrap(~year)
+l2 = ggplot(ml %>% filter(year %in% c(2021, 2022)), 
+            aes(x = length, y = factor(week), fill =  factor(AREA_CODE))) +
+  geom_density_ridges2(alpha = .4, color = 'black',
+                       scale = 2.5, rel_min_height = .01) +
+  labs(x = 'Length (mm)', 
+       y = 'Week', fill = 'Statistical Area') + # title = 'ILXSM Lengths',
+  xlim(0, 400) + 
+  theme_ridges() +
+  theme_bw() + 
+  facet_wrap(~year)
+
+l1 + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15))
+
+l2 + theme(text = element_text(size = 14), 
+         axis.text = element_text(size = 13), 
+         axis.title = element_text(size = 15))
+
+
+wt1 = ggplot(wt, 
+            aes(x = weight, y = factor(week), fill =  factor(AREA_CODE))) +
+  geom_density_ridges2(alpha = .4, color = 'black',
+                       scale = 2.5, rel_min_height = .01) +
+  labs(x = 'Weight (g)', 
+       y = 'Week', fill = 'Statistical Area') + # title = 'ILXSM Weights', 
+  annotate('text', x = 370, y = 30, label= '(a)', size = 5) +
+  xlim(0, 400) +
+  theme_ridges() +
+  theme_bw() 
+ml1 = ggplot(ml,
+            aes(x = length, y = factor(week), fill =  factor(AREA_CODE))) +
+  geom_density_ridges2(alpha = .4, color = 'black',
+                       scale = 2.5, rel_min_height = .01) +
+  labs(x = 'Length (mm)', 
+       y = 'Week', fill = 'Statistical Area') + # title = 'ILXSM Lengths',
+  annotate('text', x = 370, y = 30, label= '(b)', size = 5) +
+  xlim(0, 400) + 
+  theme_ridges() +
+  theme_bw()
+
+wt1 = wt1 + theme(text = element_text(size = 14), 
+              axis.text = element_text(size = 13), 
+              axis.title = element_text(size = 15), 
+              legend.position = 'none')
+
+ml1 = ml1 + theme(text = element_text(size = 14), 
+                  axis.text = element_text(size = 13), 
+                  axis.title = element_text(size = 15))
+
+
+wt1 + ml1
+
+
+
+
+
+### -------- 2d Histogram --------- ### 
+# Consolidate the dataset to just samples that have paired weight/length values
+ml.c <- ml %>% select(LAND_DATE,AREA_CODE,ORGANISM_ID, 
+                                length,VESSEL_NAME, VTR_SERIAL_NUM)
+
+wt.c <- wt %>% select(LAND_DATE,AREA_CODE,ORGANISM_ID, 
+                                weight,VESSEL_NAME, VTR_SERIAL_NUM)
+
+lw_paired <- right_join(ml.c, wt.c, 
+                        by = c('LAND_DATE','AREA_CODE','ORGANISM_ID', 
+                               'VESSEL_NAME', 'VTR_SERIAL_NUM'))
+
+lw_paired <- na.omit(lw_paired)
+lw_paired <- lw_paired %>% relocate(weight, .after = length)
+
+lw_paired <- lw_paired %>%
+  mutate(year = lubridate::year(LAND_DATE),
+         month = lubridate::month(LAND_DATE),
+         week = lubridate::week(LAND_DATE), 
+         day = lubridate::day(LAND_DATE))
+
+ggplot(lw_paired, aes(x = length, y = weight)) +
+  geom_point() + 
+  geom_density_2d()
+# figure 5a 
+ga = ggplot(lw_paired %>% filter(year %in% c(2021,2022)), 
+            aes(x=length, y=weight)) +
+  #geom_point() + 
+  #geom_density_2d() +
+  geom_density_2d_filled(alpha = 0.4) +
+  #scale_fill_gradientn(colours=pal) +
+  geom_density_2d(colour = "grey45") +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
+  theme_bw() + 
+  # ecodata::theme_facet() +
+  facet_wrap(~year)
+ga + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15),
+           legend.position = c(0.92, 0.73), # 73
+           legend.background = element_rect(fill = "white", color = "black"), 
+           legend.title = element_text(size = 9),
+           legend.text = element_text(size = 8)) 
+# figure 5b 
+gb = ggplot(lw_paired, 
+            aes(x=length, y=weight)) +
+  geom_point(color = 'grey32') + 
+  geom_density_2d() +
+  #geom_density_2d_filled() +
+  #geom_density_2d_filled(alpha = 0.4) +
+  geom_density_2d(colour = 'dodgerblue1') +
+  scale_fill_brewer() +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
+  theme_bw() 
+gb + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15))
+           # legend.position = c(0.92, 0.73), # 73
+           # legend.background = element_rect(fill = "white", color = "black"), 
+           # legend.title = element_text(size = 9),
+           # legend.text = element_text(size = 8)) 
+# figure 5c 
+gc = ggplot(lw_paired %>% filter(year %in% c(2021,2022)), 
+            aes(x=length, y=weight)) +
+  geom_point(color = 'grey32') + 
+  geom_density_2d() +
+  #geom_density_2d_filled() +
+  #geom_density_2d_filled(alpha = 0.4) +
+  geom_density_2d(colour = 'dodgerblue1') +
+  scale_fill_brewer() +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
+  theme_bw() +
+  facet_wrap(~year)
+
+gc + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15))
+
+# COlor palettes
+rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+r <- rf(32)
+pal <- wes_palette("Zissou1", 21, type = "continuous")
+# 2d histogram with default option
+ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_bin2d() +
+  theme_bw()
+
+# Bin size control + color palette
+gd = ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_bin2d(bins = 70) +
+  #scale_fill_continuous(type = "viridis") +
+  scale_fill_gradientn(colours=pal) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  theme_bw()
+gd + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15))
+
+
+ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_hex() +
+  scale_fill_gradientn(colours=r) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  ecodata::theme_ts() 
+
+g3 = ggplot(lw_paired %>% filter(year %in% c(2021,2022)), 
+            aes(x=length, y=weight)) +
+  geom_hex() +
+  scale_fill_gradientn(colours=pal) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
+  ecodata::theme_facet() +
+  facet_wrap(~year)
+g3 + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15),
+           legend.position = c(0.92, 0.73), # 73
+           legend.background = element_rect(fill = "white", color = "black"), 
+           legend.title = element_text(size = 9),
+           legend.text = element_text(size = 8)) 
+
+
+ggplot(lw_paired, aes(x=length, y=weight)) +
+  geom_point() +
+  geom_density_2d_filled(alpha = 0.4) +
+  geom_density_2d(colour = "black")
