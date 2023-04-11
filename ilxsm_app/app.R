@@ -288,15 +288,26 @@ server <- function(input, output, session) {
     # s[x,y] --> s[curveNumber,key]
     print(s)
     d = paired[paired$AREA_CODE==s$key,]
-        ggplot(d, 
-             aes(x=length, y=weight)) +
-        geom_hex() +
-        scale_fill_gradientn(colours=pal) +
-        xlab('Mantle Length (mm)') +
-        ylab('Body Weight (g)') +
-        labs(fill = 'Count') +
-        ecodata::theme_facet() +
-        facet_wrap(~year)
+    ggplot(d,  
+           aes(x=length, y=weight)) +
+      geom_point(color = 'grey32') + 
+      geom_density_2d() +
+      geom_density_2d(colour = 'dodgerblue1') +
+      scale_fill_brewer() +
+      xlab('Mantle Length (mm)') +
+      ylab('Body Weight (g)') +
+      labs(fill = 'Count') +
+      theme_bw() +
+      facet_wrap(~year)
+        # ggplot(d, 
+        #      aes(x=length, y=weight)) +
+        # geom_hex() +
+        # scale_fill_gradientn(colours=pal) +
+        # xlab('Mantle Length (mm)') +
+        # ylab('Body Weight (g)') +
+        # labs(fill = 'Count') +
+        # ecodata::theme_facet() +
+        # facet_wrap(~year)
   })
   
   
@@ -307,8 +318,10 @@ server <- function(input, output, session) {
       add_histogram(xbins = list(start = 0, end = 500)) %>%
       layout(barmode = "overlay",
              title = '2021',
-             xaxis = list(title = 'Mantle length (mm)'), 
-             yaxis = list(title = 'Frequency')) %>%
+             xaxis = list(title = 'Mantle length (mm)',
+                          range=c(0,300)), 
+             yaxis = list(title = 'Frequency')
+               ) %>%
       highlight(on = "plotly_selected", persistent = FALSE)
   })
   
@@ -335,7 +348,8 @@ server <- function(input, output, session) {
       add_histogram(xbins = list(start = 0, end = 500)) %>%
       layout(barmode = "overlay",
              title = '2022',
-             xaxis = list(title = 'Mantle length (mm)'), 
+             xaxis = list(title = 'Mantle length (mm)',
+                          range=c(0,300)), 
              yaxis = list(title = 'Frequency')) %>%
       highlight(on = "plotly_selected", persistent = FALSE)
   })
