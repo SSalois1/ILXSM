@@ -1,0 +1,395 @@
+---
+title: "maturity_data_analysis"
+author: "Sarah Salois"
+output: 
+ html_document:
+    code_fold: hide
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, include=FALSE, warning=FALSE, message = FALSE}
+library(plyr)
+library(dplyr)
+library(sp)
+library(ggplot2)
+library(rgdal)
+library(RColorBrewer)
+library(mapdata)
+library(marmap)
+library(raster)
+library(sf)
+library(tidyverse)
+library(fields)
+library(readxl)
+library(interp)
+library(leaflet)
+library(wesanderson)
+library(scales)
+library(ggnewscale)
+library(ggridges)
+library(contourPlot)
+library(TAM)
+library(Hmisc)
+
+```
+
+
+## Data Wrangling 
+
+```{r, message=FALSE, warning= FALSE}
+# read in maturity data sets
+setwd(here::here('data/'))
+prevail <- read.csv('maturity_data_prevail.csv')
+seafarer <- read.csv('maturity_data_seafarer.csv')
+prevail$mat_stage_f <- prevail$ngl/prevail$ml
+seafarer$mat_stage_f<- seafarer$ngl/seafarer$ml
+# merge the data sets 
+df <- rbind(prevail, seafarer)
+df$date <-lubridate::mdy(df$date)
+df <- df %>%
+  mutate(year = lubridate::year(date),
+         month = lubridate::month(date),
+         week = lubridate::week(date), 
+         day = lubridate::day(date))
+# color palette
+wespal <- wes_palette("Zissou1")
+wespal2 <- wes_palette("Zissou1", 10, type = "continuous")
+
+```
+
+## Female  
+
+### Mantle length as a function of nidamental gland length 
+
+```{r}
+g <- ggplot(df, aes(ml, ngl)) +           
+  geom_point() + 
+  xlab('Mantle length (mm)') + 
+  ylab('Nidamental gland length (mm)') +
+  ecodata::theme_ts() + 
+  facet_wrap(~vessel_name)
+
+g + stat_smooth(method = "lm",
+              formula = y ~ x,
+              geom = "smooth") + 
+   stat_cor(label.y = 70)+ #this means at 35th unit in the y axis, the r squared and p value will be shown
+        stat_regline_equation(label.y = 76) #this means at 30th unit regresion line equation will be shown
+
+ggscatter(
+  df, x = "ml", y = "ngl",
+  add = "reg.line"
+) +
+  facet_wrap(~vessel_name) +
+  stat_cor(label.y = 155) +
+  stat_regline_equation(label.y = 165)
+
+ggscatter(
+  df, x = "ml", y = "ngl",
+  add = "reg.line"
+) +
+  stat_cor(label.y = 155) +
+  stat_regline_equation(label.y = 165)
+
+
+
+```
+
+
+
+```{r, warning=FALSE}
+g <- ggplot(df %>% filter(vessel_name == 'Seafarer'), aes(ml, ngl)) +
+  geom_point() + 
+  xlab('Mantle length (mm)') + 
+  ylab('Nidamental gland length (mm)') +
+  ecodata::theme_ts() 
+g + stat_smooth(method = "lm",
+                formula = y ~ x,
+                geom = "smooth") + 
+  stat_cor(label.y = 70)+ 
+  stat_regline_equation(label.y = 76)
+```
+
+
+```{r}
+```
+
+
+
+
+
+
+### Maturity index 
+Maturation stages (m): 
+Stage I: m ≤ 0.09
+Stage II: 0.05 < m ≤ 0.125
+Stage III: 0.125 < m ≤ 0.20
+Stage IV:  0.20 < m ≤ 0.35
+Stage V: 0.35 < m
+
+```{r}
+hist(prevail$mat_stage_f, xlab = 'Maturation Stage (m)',
+     main = '', xlim = c(0.05,0.45), ylim = c(0,20))
+hist(seafarer$mat_stage_f, xlab = 'Maturation Stage (m)',
+     main = '', xlim = c(0.05,0.45),  ylim = c(0,20))
+p <-ggplot(df, aes(x = mat_stage_f)) + 
+   geom_histogram(color="black", fill="grey35") + 
+   xlab('Female Maturity Stage (m)') +
+   facet_wrap(~vessel_name) + 
+   theme_bw()
+p
+```
+
+
+
+```{r}
+p <-ggplot(df, aes(x = mat_stage_f, fill = as.factor(vessel_name))) + 
+   geom_histogram(position = "identity", alpha = 0.4, color="black") + 
+   xlab('Female Maturity Stage (m)') +
+   labs(fill = 'Vessel') +
+   theme_bw()
+p
+```
+
+
+
+
+## Male
+
+### Maturity index 
+Maturation stages: 
+Stage 1: immature, no spermatophores
+Stage 2: maturing I, no spermatophores 
+Stage 3: maturing II, no to several spermatophores 
+Stage 4: mature, spermatophores present
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(df, aes(mat_stage)) +
+    geom_bar(color="black", fill="grey35") +
+   xlab('Male Maturity stage') +
+    facet_wrap(~vessel_name) + 
+  theme_bw()
+```
+
+
+```{r}
+p <-ggplot(df, aes(x = mat_stage, fill = as.factor(vessel_name))) + 
+   geom_bar(position = "identity", alpha = 0.4, color="black") + 
+   xlab('Male Maturity Stage (m)') +
+   labs(fill = 'Vessel') +
+   theme_bw()
+p
+```
+
+
+
+
+```{r}
+ggplot(df %>% filter(vessel_name == 'Seafarer'), aes(mat_stage)) +
+    geom_bar(color="black", fill="grey35") +
+   xlab('Male Maturity stage') +
+   
+  theme_bw()
+```
+
+## Length-weight relationships 
+
+### Ridge plots 
+
+Looking at distribution of weights and lengths by sex for each sample. The sample from Prevail was from October 2022 and the sample from Seafarer was from February 2023.  
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(df,
+       aes(x = wt, y = factor(sex), 
+                          fill = stat(quantile))) +
+  stat_density_ridges(quantile_lines = FALSE,
+                      calc_ecdf = TRUE, rel_min_height = 0.0001,
+                      geom = "density_ridges_gradient") +
+  labs(x = 'Weights (g)', y = 'Sex') +
+  scale_fill_brewer(name = 'Quartiles', palette = 'Greys') +
+  ecodata::theme_ts() + 
+  facet_wrap(~vessel_name)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(df %>% filter(sex %in% c('M','F')),
+       aes(x = wt, y = factor(sex), 
+                          fill = vessel_name)) +
+  geom_density_ridges(alpha = 0.7) +
+  labs(fill = 'Vessel Name') +
+  # stat_density_ridges(quantile_lines = FALSE,
+  #                     calc_ecdf = TRUE, rel_min_height = 0.0001,
+  #                     geom = "density_ridges_gradient") +
+  labs(x = 'Weights (g)', y = 'Sex') +
+ # scale_fill_brewer(name = 'Quartiles', palette = 'Greys') +
+  ecodata::theme_ts()
+```
+
+
+
+
+
+
+
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(df,
+       aes(x = ml, y = factor(sex), 
+                          fill = stat(quantile))) +
+  stat_density_ridges(quantile_lines = FALSE,
+                      calc_ecdf = TRUE, rel_min_height = 0.0001,
+                      geom = "density_ridges_gradient") +
+  labs(x = 'Mantle length (mm)', y = 'Sex') +
+  scale_fill_brewer(name = 'Quartiles', palette = 'Greys') +
+  ecodata::theme_ts() + 
+  facet_wrap(~vessel_name)
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(df %>% filter(sex %in% c('M','F')),
+       aes(x = ml, y = factor(sex), 
+                          fill = vessel_name)) +
+  geom_density_ridges(alpha = 0.7) +
+  labs(fill = 'Vessel Name') +
+  labs(x = 'Mantle length (mm)', y = 'Sex') +
+  ecodata::theme_ts()
+```
+
+
+
+
+
+### Males & females combined
+
+Length as a function of weight for both sexes and samples combined. 
+
+```{r}
+g <- ggplot(df, aes(ml, wt)) +           
+  geom_point() + 
+  xlab('Mantle length (mm)') + 
+  ylab('Body weight (g)') +
+  ecodata::theme_ts()
+
+g + stat_smooth(method = "lm",
+              formula = y ~ x,
+              geom = "smooth")
+```
+
+Length as a function of weight for both sexes seperated by sample. 
+
+```{r}
+g <- ggplot(df, aes(ml, wt)) +           
+  geom_point() + 
+  xlab('Mantle length (mm)') + 
+  ylab('Body weight (g)') +
+  ecodata::theme_ts() + 
+  facet_wrap(~vessel_name)
+
+g + stat_smooth(method = "lm",
+              formula = y ~ x,
+              geom = "smooth")
+```
+
+
+
+### Males vs females 
+
+Length as a function of weight for males and females seperately. Here, I indicates the sex was indeterminate for that sample.  
+
+
+```{r, warning=FALSE}
+
+# mod = lm(ml ~ wt, data = df)
+# summary(mod)$coefficients
+
+g <- ggplot(df, aes(ml, wt)) +           
+  geom_point() + 
+  xlab('Mantle length (mm)') + 
+  ylab('Body weight (g)') +
+  ecodata::theme_ts() + 
+  facet_wrap(~sex)
+
+g + stat_smooth(method = "lm",
+              formula = y ~ x,
+              geom = "smooth")
+
+
+ggscatter(
+  df, x = "ml", y = "wt",
+  color = "sex", palette = "jco",
+  add = "reg.line"
+) +
+  facet_wrap(~sex) +
+  stat_cor(label.y = 155) +
+  stat_regline_equation(label.y = 165)
+
+```
+
+
+## Age at weight estimates 
+
+Code below computes age estimate for each weight
+Parameters of weight at age estimation per Hendrickson and Hart 2006 
+for males and females combined. The formula for Weight as a function of Age 
+is: weight = alpha * age^beta, therefore age estimate is the 
+inverse: (weight/alpha)^(1/beta)
+
+### Frequency tables
+
+Generate weight/length frequencies 
+
+```{r}
+tabp = table(prevail$wt) 
+tabs = table(seafarer$wt) 
+tab.s = seafarer %>% group_by(wt) %>% tally() 
+```
+
+```{r}
+library(patchwork)
+# estimate age in days
+alpha<-1.12e-6
+beta<-3.60
+# df$age.est<-(df$wt/alpha)^(1/beta)
+tab.p = table(subset(df, vessel_name == 'Prevail', 
+                                    select = wt))
+tab.s = table(subset(df, vessel_name == 'Seafarer', 
+                                    select = wt))
+barplot(tab.p, main=paste('Weight frequency for Seafarer sample collected in week 43'),
+        xlab = 'Weight (g)', ylab = 'Frequency', col='deeppink')
+barplot(tab.s, main=paste('Weight frequency for Seafarer sample collected in week 7'),
+        xlab = 'Weight (g)', ylab = 'Frequency', col='deeppink')
+tab.age.p = table(round(subset(df, vessel_name == 'Seafarer', select = age.est)))
+tab.age.s = table(round(subset(df, vessel_name == 'Seafarer', select = age.est)))
+barplot(tab.age.p, main=paste('Age frequency for Prevail sample collected in week 43'),
+        xlab = 'Age in days', ylab = 'Frequency', col='blue')
+barplot(tab.age.s, main=paste('Age frequency for Seafarer sample collected in week 7'),
+        xlab = 'Age in days', ylab = 'Frequency', col='blue')
+# Analysis of putative  Birth weeks
+# Compute birth week as function of age at capture
+# df$birth.week  <- round(df$week-df$age.est/7)  
+b.week.table.p <- table(round(subset(df, vessel_name == 'Prevail', 
+                                    select = birth.week)))
+b.week.table.s <- table(round(subset(df, vessel_name == 'Seafarer', 
+                                    select = birth.week)))
+barplot(b.week.table.p, 
+        main = paste('Birthweek frequency for Prevail sample collected in week 43'),
+        xlab='Birth Week', ylab='Frequency', col='red')
+barplot(b.week.table.s, 
+        main = paste('Birthweek frequency for Seafarer sample collected in week 7'),
+        xlab='Birth Week', ylab='Frequency', col='red')
+
+
+
+```
+
+
+
