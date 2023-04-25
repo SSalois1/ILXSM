@@ -15,7 +15,7 @@ isolate_weights <- function(bsm_data, stat_area_shapefile) {
            day = lubridate::day(LAND_DATE))
   wt <- dat %>%
     filter(PARAM_TYPE == 'WT') %>%
-    rename(weight = PARAM_VALUE_NUM)
+    dplyr::rename(weight = 'PARAM_VALUE_NUM')
   ## Add coordinates
   wd = here::here('shapefiles')
   stat_areas_sp <- rgdal::readOGR(wd, stat_area_shapefile, verbose = FALSE) 
@@ -70,7 +70,7 @@ isolate_lengths <- function(bsm_data, stat_area_shapefile) {
            day = lubridate::day(LAND_DATE))
   ml <- dat %>%
     filter(PARAM_TYPE == 'ML') %>%
-    rename(length = PARAM_VALUE_NUM)
+    dplyr::rename(length = PARAM_VALUE_NUM)
   ## Add coordinates
   wd = here::here('shapefiles')
   stat_areas_sp <- rgdal::readOGR(wd, stat_area_shapefile, verbose = FALSE) 
