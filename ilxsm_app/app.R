@@ -6,6 +6,8 @@ library(crosstalk)
 library(plotly)
 library(sf)
 library(sp)
+library(broom)
+library(rgdal)
 source('ilxsm_data.R')
 # Pull in pre-wrangled length/weight data
 ml <- isolate_lengths('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv','groundfish_stat_areas')
