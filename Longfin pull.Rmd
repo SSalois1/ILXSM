@@ -1,0 +1,317 @@
+---
+title: "Ind_Ves_Poster_Plotting"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Description
+This is ... TBA
+
+
+# Setting global options
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=6, fig.path='Figs/',
+                      echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+# Loading packages
+Loading the many packages that are used somewhere in this script. This script has evolved to do many things and many of these are only need in one or two places.
+
+```{r Loading packages}
+#loading needed packages
+#Not all of these are needed right away
+library(tidyverse)
+library(lubridate) #dates
+
+```
+
+# Setting up DB connection
+Setting up connections to SOLE and NOVA using ROracle. Don't need to run, but could be set up. Needs an additional file and some other software installation.
+
+```{r Setting up DB connection}
+#File path may need to change
+source('C:/Users/andrew.jones/Desktop/dbconnection_v3.R')
+
+```
+
+# Pulling the data from the new view
+
+```{r}
+library(dbplyr)
+dbGetQuery(con,"SET ROLE ALL")
+
+trip <- dplyr::tbl(con, dbplyr::in_schema("FVTR", "COMBINED_VERS_VIEW"))
+trip_tot  <- trip %>% group_by(TRIP_ID) %>% summarise(SUM=sum(HAIL_AMOUNT,na.rm=TRUE)) %>% collect()
+
+sql_pull <- "SELECT * from fvtr.COMBINED_VERS_VIEW WHERE SPECIES_ITIS in (82372)"
+
+sql_pull_db <- dbGetQuery(con,sql_pull)
+
+conversion_factors_cfdbs <- dbGetQuery(con,"select * from CFDBS.SPECIES_ITIS_NE")
+
+species_itis_common <- conversion_factors_cfdbs %>% group_by(SPECIES_ITIS,COMMON_NAME) %>% tally() %>% as.data.frame()
+
+```
+
+# Cams data 
+
+Pulling and making a set of targeted trips (> 0.39 longfin catch)
+
+```{r}
+library(dbplyr)
+cams <- dplyr::tbl(con.nova, dbplyr::in_schema("CAMS_GARFO", "CAMS_LANDINGS"))
+cams_lf_tot  <- cams %>% filter(ITIS_TSN == 82372) %>% collect()
+
+cams_trip_tot  <- cams %>% group_by(DOCID) %>% summarise(SUM=sum(LIVLB,na.rm=TRUE)) %>% collect()
+
+cams_lf_tot_target <- cams_lf_tot  %>% 
+                          left_join(.,cams_trip_tot) %>% mutate(PROP_LONGFIN=LIVLB/SUM) %>%
+                          filter(PROP_LONGFIN > 0.399)
+
+```
+
+# Looking at longfin catch
+
+```{r}
+library(gt)
+
+trips_by_month <- sql_pull_db %>% 
+  group_by(SAIL_YEAR,TRIP_ID,SAIL_MONTH,VESSEL_NAME) %>% 
+  distinct(TRIP_ID) %>% as.data.frame() %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>%
+  tally() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = n,names_from = SAIL_YEAR)
+
+vessels_by_month <- sql_pull_db %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH,VESSEL_NAME) %>% 
+  distinct(VESSEL_NAME) %>% as.data.frame() %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>%
+  tally() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = n,names_from = SAIL_YEAR)
+
+weight_by_month <- sql_pull_db %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR)
+
+weight_by_area <- sql_pull_db %>% 
+  group_by(SAIL_YEAR,FA_AREA_CODE) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR)
+  
+weight_by_port <- sql_pull_db %>% 
+  group_by(SAIL_YEAR,END_PORT) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR)
+
+weight_by_port %>% gt()
+
+weight_by_area %>% gt() 
+
+weight_by_month %>% gt()
+
+vessels_by_month %>% gt()
+
+trips_by_month %>% gt()
+
+```
+
+# Putting things in a excel workbook
+
+```{r}
+require(openxlsx)
+
+list_of_datasets <- list("Trips_by_month" = trips_by_month, 
+                         "Vessels_by_month" = vessels_by_month,
+                         "Weight_by_month" = weight_by_month, 
+                         "Weight_by_port" = weight_by_port,
+                         "Weight_by_area" = weight_by_area
+                         )
+write.xlsx(list_of_datasets, file = "Longfin_Study_Fleet.xlsx")
+
+
+```
+
+# Looking at longfin catch
+
+```{r}
+library(gt)
+
+sql_pull_db_target <- sql_pull_db %>% 
+                          left_join(.,trip_tot) %>% mutate(PROP_LONGFIN=HAIL_AMOUNT/SUM) %>%
+                          filter(PROP_LONGFIN > 0.399)
+
+trips_by_month_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,TRIP_ID,SAIL_MONTH,VESSEL_NAME) %>% 
+  distinct(TRIP_ID) %>% as.data.frame() %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>%
+  tally() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = n,names_from = SAIL_YEAR) %>%
+  select(SAIL_MONTH,sort(names(.)))
+
+vessels_by_month_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH,VESSEL_NAME) %>% 
+  distinct(VESSEL_NAME) %>% as.data.frame() %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>%
+  tally() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = n,names_from = SAIL_YEAR) %>%
+  select(SAIL_MONTH,sort(names(.)))
+
+weight_by_month_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,SAIL_MONTH) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  arrange(SAIL_MONTH) %>%
+  mutate(SAIL_MONTH = month.abb[SAIL_MONTH]) %>%
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR) %>%
+  select(SAIL_MONTH,sort(names(.)))
+
+weight_by_area_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,FA_AREA_CODE) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR) %>%
+  select(FA_AREA_CODE,sort(names(.)))
+  
+weight_by_port_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,END_PORT) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR) %>%
+  select(END_PORT,sort(names(.)))
+
+weight_by_port_targ %>% gt()
+
+weight_by_area_targ %>% gt() 
+
+weight_by_month_targ %>% gt()
+
+vessels_by_month_targ %>% gt()
+
+trips_by_month_targ %>% gt()
+
+```
+
+# Putting things in a excel workbook
+
+```{r}
+require(openxlsx)
+
+list_of_datasets <- list("Trips_by_month_targ" = trips_by_month_targ, 
+                         "Vessels_by_month_targ" = vessels_by_month_targ,
+                         "Weight_by_month_targ" = weight_by_month_targ, 
+                         "Weight_by_port_targ" = weight_by_port_targ,
+                         "Weight_by_area_targ" = weight_by_area_targ
+                         )
+write.xlsx(list_of_datasets, file = "Longfin_Study_Fleet_Targeted.xlsx")
+
+
+```
+
+# Study Fleet targeted trips as proportion of total (CAMS)
+
+For the 'targeted' subset of both
+
+```{r}
+
+cams_sums <- cams_lf_tot_target %>% group_by(MONTH,YEAR) %>% summarise(SUM_CAMS=sum(LIVLB,na.rm = TRUE))
+
+sf_sums <- sql_pull_db_target %>% mutate(MONTH = SAIL_MONTH, YEAR = SAIL_YEAR) %>% 
+  group_by(MONTH,YEAR) %>% summarise(SUM_SF=sum(HAIL_AMOUNT,na.rm = TRUE))
+
+prop_sf_target <- left_join(cams_sums,sf_sums) %>% filter(YEAR > 2010) %>%
+  mutate(PROP_SF = SUM_SF/SUM_CAMS) %>%
+  as.data.frame() %>%
+  dplyr::select(-SUM_CAMS,-SUM_SF) %>%
+  pivot_wider(values_from = PROP_SF,names_from = YEAR)
+
+prop_sf_target %>% gt()
+  
+```
+
+# Putting things in a excel workbook
+
+```{r}
+require(openxlsx)
+
+list_of_datasets <- list("Prop_sf_target" = prop_sf_target
+                         )
+write.xlsx(list_of_datasets, file = "Longfin_Study_Fleet_CAMS_Targeted.xlsx")
+
+```
+
+
+# Looking at longfin catch
+
+```{r}
+library(gt)
+
+sql_pull_db_target <- sql_pull_db %>% 
+                          left_join(.,trip_tot) %>% mutate(PROP_LONGFIN=HAIL_AMOUNT/SUM) %>%
+                          filter(PROP_LONGFIN > 0.399)
+  
+weight_by_vessel_targ <- sql_pull_db_target %>% 
+  group_by(SAIL_YEAR,VESSEL_NAME) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_YEAR) %>%
+  arrange(-`2022`)
+
+weight_by_vessel_targ_2022 <- sql_pull_db_target %>% filter(SAIL_YEAR == 2022) %>%
+  group_by(SAIL_MONTH,VESSEL_NAME) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_MONTH)
+
+weight_by_vessel_targ_2021 <- sql_pull_db_target %>% filter(SAIL_YEAR == 2021) %>%
+  group_by(SAIL_MONTH,VESSEL_NAME) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_MONTH)
+
+weight_by_vessel_targ_2020 <- sql_pull_db_target %>% filter(SAIL_YEAR == 2020) %>%
+  group_by(SAIL_MONTH,VESSEL_NAME) %>% 
+  summarise(SUM_WT = sum(HAIL_AMOUNT,na.rm=TRUE)) %>% 
+  as.data.frame() %>% 
+  pivot_wider(values_from = SUM_WT,names_from = SAIL_MONTH)
+
+weight_by_vessel_targ %>% gt()
+
+weight_by_vessel_targ_2022 %>% gt() 
+
+weight_by_vessel_targ_2021 %>% gt()
+
+weight_by_vessel_targ_2020 %>% gt()
+
+```
+
+# Putting things in a excel workbook
+
+```{r}
+require(openxlsx)
+
+list_of_datasets <- list("Weight_by_vessel_targ" = weight_by_vessel_targ, 
+                         "Weight_by_vessel_targ_2022" = weight_by_vessel_targ_2022,
+                         "Weight_by_vessel_targ_2021" = weight_by_vessel_targ_2021, 
+                         "Weight_by_vessel_targ_2020" = weight_by_vessel_targ_2020
+                         )
+write.xlsx(list_of_datasets, file = "Longfin_Study_Fleet_Targeted_Vessels.xlsx")
+
+
+```
+
