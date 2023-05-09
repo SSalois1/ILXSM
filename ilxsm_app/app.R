@@ -8,8 +8,10 @@ library(sf)
 library(sp)
 library(broom)
 library(rgdal)
-source('ilxsm_data.R')
+library(tidyverse)
+source('ilxsm_data_wrangle_functions.R')
 # Pull in pre-wrangled length/weight data
+setwd(here::here('ilxsm_app/data'))
 ml <- isolate_lengths('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv','groundfish_stat_areas')
 wt <- isolate_weights('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv','groundfish_stat_areas')
 paired <- pair_length_weight(ml, wt)
@@ -49,8 +51,8 @@ ui <- fluidPage(
       h2("Select times and locations of interest"),
       p(""),
       br(),
-      selectInput(input = "Year", label= "Year:",
-                  choices = unique(ml$year), selected ="2021"),
+      # selectInput(input = "Year", label= "Year:",
+      #             choices = unique(ml$year), selected ="2021"),
       selectInput('var2', 
                   label = 'GARFO Fisheries Statistical Areas', 
                   choices = c('525', '526', '537', '541', '613',
