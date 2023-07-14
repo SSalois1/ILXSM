@@ -34,6 +34,7 @@ library(wesanderson)
 library(scales)
 library(ggnewscale)
 library(ggridges)
+library(ggpubr)
 library(contourPlot)
 library(TAM)
 library(Hmisc)
@@ -42,13 +43,52 @@ library(Hmisc)
 
 
 ## Data Wrangling 
+The code below reads in the data, calculates maturity for females by 
+computing the nidamental gland index (the length of the nidamental gland
+divided by the dorsal mantle length) and comparing it to the following table
+from Durward et al. 1979: 
+
+**Maturity index** 
+Maturation stages for female shortfin squid (m): 
+Stage I: m ≤ 0.09
+Stage II: 0.05 < m ≤ 0.125
+Stage III: 0.125 < m ≤ 0.20
+Stage IV:  0.20 < m ≤ 0.35
+Stage V: 0.35 < m
+
+*Durward, R.D., Amaratunga, T. and O’Dor, R.K., 1979. Maturation index and fecundity for female squid, Illex illecebrosus (LeSueur, 1821). ICNAF Res. Bull, 14, pp.67-72.*
+
 
 ```{r, message=FALSE, warning= FALSE}
 # read in maturity data sets
 prevail <- read.csv(here::here('data/maturity_data_prevail.csv'))
 seafarer <- read.csv(here::here('data/maturity_data_seafarer.csv'))
-prevail$mat_stage_f <- prevail$ngl/prevail$ml
-seafarer$mat_stage_f<- seafarer$ngl/seafarer$ml
+# Calulate Nidamental Gland Index 
+prevail$ngi <- (prevail$ngl)/(prevail$ml) # NGI == nidamental gland index
+prevail = prevail %>% 
+  mutate(
+    mat_stage_m = mat_stage,
+    mat_stage_f = case_when(
+      ngi < 0.09 ~ 1, 
+      ngi > 0.05 & ngi < 0.125 ~ 2, 
+      ngi > 0.125 & ngi < 0.20 ~ 3, 
+      ngi > 0.20 & ngi < 0.35 ~ 4, 
+      ngi > 0.35  ~ 5
+    ))
+
+seafarer$ngi<- (seafarer$ngl)/(seafarer$ml)
+seafarer = seafarer %>% 
+  mutate(
+    mat_stage_m = mat_stage,
+    mat_stage_f = case_when(
+      ngi < 0.09 ~ 1, 
+      ngi > 0.05 & ngi < 0.125 ~ 2, 
+      ngi > 0.125 & ngi < 0.20 ~ 3, 
+      ngi > 0.20 & ngi < 0.35 ~ 4, 
+      ngi > 0.35  ~ 5
+    ))  
+
+
 # merge the data sets 
 df <- rbind(prevail, seafarer)
 df$date <-lubridate::mdy(df$date)
@@ -116,32 +156,17 @@ g + stat_smooth(method = "lm",
 ```
 
 
-```{r}
-```
-
-
-
-
-
-
-### Maturity index 
-Maturation stages (m): 
-Stage I: m ≤ 0.09
-Stage II: 0.05 < m ≤ 0.125
-Stage III: 0.125 < m ≤ 0.20
-Stage IV:  0.20 < m ≤ 0.35
-Stage V: 0.35 < m
 
 ```{r}
 hist(prevail$mat_stage_f, xlab = 'Maturation Stage (m)',
-     main = '', xlim = c(0.05,0.45), ylim = c(0,20))
+     main = '', xlim = c(1,5))
 hist(seafarer$mat_stage_f, xlab = 'Maturation Stage (m)',
-     main = '', xlim = c(0.05,0.45),  ylim = c(0,20))
+     main = '', xlim = c(1,5))
 p <-ggplot(df, aes(x = mat_stage_f)) + 
-   geom_histogram(color="black", fill="grey35") + 
+   geom_histogram(color="black", fill="grey45",  binwidth = 0.9) + 
    xlab('Female Maturity Stage (m)') +
    facet_wrap(~vessel_name) + 
-   theme_bw()
+   theme_classic2()
 p
 ```
 
@@ -149,7 +174,8 @@ p
 
 ```{r}
 p <-ggplot(df, aes(x = mat_stage_f, fill = as.factor(vessel_name))) + 
-   geom_histogram(position = "identity", alpha = 0.4, color="black") + 
+   geom_bar(position = position_dodge(), alpha = 0.4, color="black", 
+                  binwidth = 0.5) + 
    xlab('Female Maturity Stage (m)') +
    labs(fill = 'Vessel') +
    theme_bw()
@@ -302,7 +328,8 @@ g + stat_smooth(method = "lm",
 
 ### Males vs females 
 
-Length as a function of weight for males and females seperately. Here, I indicates the sex was indeterminate for that sample.  
+Length as a function of weight for males and females seperately. Here, I 
+indicate if the sex was indeterminate for that sample.  
 
 
 ```{r, warning=FALSE}
