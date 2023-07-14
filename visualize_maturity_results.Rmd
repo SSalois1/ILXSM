@@ -45,9 +45,8 @@ library(Hmisc)
 
 ```{r, message=FALSE, warning= FALSE}
 # read in maturity data sets
-setwd(here::here('data/'))
-prevail <- read.csv('maturity_data_prevail.csv')
-seafarer <- read.csv('maturity_data_seafarer.csv')
+prevail <- read.csv(here::here('data/maturity_data_prevail.csv'))
+seafarer <- read.csv(here::here('data/maturity_data_seafarer.csv'))
 prevail$mat_stage_f <- prevail$ngl/prevail$ml
 seafarer$mat_stage_f<- seafarer$ngl/seafarer$ml
 # merge the data sets 
