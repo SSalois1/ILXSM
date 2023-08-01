@@ -1,94 +1,10 @@
 library(patchwork)
-setwd(here::here('data/'))
-setwd(here::here('data/ilxsm'))
-lw_data <- read.csv('Entire_Database_Pull_ILXSM_2.14.23.csv')
-ptab <- read.csv('Illex_Vessel_Pivot_Tables_Years_Combined.csv')
-setwd(here::here('data/ilxsm'))
-dat <- read.csv('ILXSM_EntirePull_Wdealerinfo_3_14_21.csv')
-dat <- dat %>%
-  mutate(PARAM_VALUE_NUM = case_when(PARAM_TYPE == 'ML' & UNIT_MEASURE == 'CM' ~ PARAM_VALUE_NUM * 10, 
-                                     PARAM_TYPE == 'ML' & UNIT_MEASURE == 'MM'~ PARAM_VALUE_NUM, 
-                                     PARAM_TYPE == 'WT' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM))
-dat$LAND_DATE <-lubridate::dmy(dat$LAND_DATE)
-dat <- dat %>%
-  mutate(year = lubridate::year(LAND_DATE),
-         month = lubridate::month(LAND_DATE),
-         week = lubridate::week(LAND_DATE), 
-         day = lubridate::day(LAND_DATE))
-
-setwd(here::here('data/ilxsm'))
-ptab_tally <- ptab %>% 
-  group_by(Year, Processor) %>%
-  summarise(n_vessels = length(unique(Fishing.Vessel)))
-
-ptab_stat <- ptab %>% 
-  group_by(Year) %>%
-  summarise(n_vessels = length(unique(Fishing.Vessel)))
-
-dat_stat <- dat %>% 
-  group_by(year) %>%
-  summarise(n_vessels = length(unique(VESSEL_NAME)), 
-            n_stat_areas = length(unique(AREA_CODE)))
-
-ptab_stat$stat_area <- dat_stat %>% filter(year %in% c(2021, 2022)) %>% select(n_stat_areas)
-ptab_stat <- ptab_stat %>% rename(stat_area = stat_area$n_stat_areas)
-p1 = ggplot(data = ptab_stat, aes(x = factor(Year), y = n_vessels, 
-                                  fill = factor(Year))) +
-  geom_bar(stat ='identity', position = position_dodge(),
-           col = 'black') +
-  ylab('Number of Vessels') +
-  xlab('Year') +
-  #labs(fill = 'Year') +
-  scale_fill_grey(start = 0, end = 0.8) + 
-  ecodata::theme_ts()
-
-p1 = p1 +  theme(legend.position = 'none', 
-            text = element_text(size = 14), 
-            axis.text = element_text(size = 13), 
-            axis.title = element_text(size = 15),
-            axis.ticks.length = unit(-1.4, "mm")) 
-
-
-p2 = ggplot(data = ptab_tally, aes(x = factor(Year), y = n_vessels, 
-                                   fill = factor(Processor))) +
-  geom_bar(stat ='identity', position = position_dodge(),
-           col = 'black') +
-  ylab('Number of Vessels') +
-  xlab('Year') +
-  labs(fill = 'Processor/Dealer') +
-  scale_fill_grey(start = 0, end = 0.8) + 
-  annotate('text', x = 0.5, y = 16, label= '(a)', size = 5) +
-  ecodata::theme_ts()
-
-p2 = p2 +  theme(text = element_text(size = 14), 
-            axis.text = element_text(size = 13), 
-            axis.title = element_text(size = 15),
-            axis.ticks.length = unit(-1.4, "mm"), 
-            legend.position = c(0.82, 0.85),
-            legend.background = element_rect(fill = "white", color = "black"), 
-            legend.title = element_text(size = 12),
-            legend.text = element_text(size = 8))
-  
-  
-
-p3 = ggplot(data = ptab_stat, aes(x = factor(Year), y = stat_area$n_stat_areas)) +
-  geom_bar(stat ='identity', position = position_dodge(),
-           col = 'black', fill = 'grey22') +
-  ylab('Number of Statistical Areas Sampled') +
-  xlab('Year') +
-  labs(fill = 'Year') +
-  #scale_fill_grey(start = 0, end = 0.8) + 
-  annotate('text', x = 0.5, y = 18, label= '(b)', size = 5) +
-  ecodata::theme_ts()
-
-p3 = p3 +  theme(text = element_text(size = 14), 
-            axis.text = element_text(size = 13), 
-            axis.title = element_text(size = 15),
-            axis.ticks.length = unit(-1.4, "mm")) 
-
-p2 + p3
-   
-### Maps 
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(ecodata)
+## -- FIGURE 1 -- ##
+# Maps 
 lw_data <- read.csv('Entire_Database_Pull_ILXSM_2.14.23.csv')
 lw_tally_full <- lw_data %>% 
   group_by(AREA_CODE) %>%
@@ -242,8 +158,136 @@ p1 +  theme(text = element_text(size = 14),
             legend.background = element_rect(fill = "white", color = "black"), 
             legend.title = element_text(size = 11),
             legend.text = element_text(size = 11)) 
+# -- FIGURE 2 -- #
+# Landings and economic value
+landings_23 <- read.csv(here::here('data/Illex_CAMS_LANDINGS_TOTALS.csv')) # updated from Andy
+options(scipen=999)
+vals = seq(from = 10000000, to= 60000000, by = 10000000)
+val.labs = c('10,000,000','20,000,000',
+          '30,000,000','40,000,000',
+         '50,000,000','60,000,000')
+val.labs = c('0','20,000,000',
+             '40,000,000',
+            '60,000,000')
+val.breaks = seq(from = 10000000, to= 60000000, by = 10000000)
+p2 = ggplot(landings_23) + 
+  geom_line(aes(x = YEAR, y = LIVLB, linetype = 'Landings')) + 
+  geom_line(aes(x = YEAR, y = VALUE, linetype = 'Value'), show.legend = TRUE) +
+  xlim(1996,2023) +
+  labs(x = 'Year') + 
+  scale_y_continuous(name = 'Landings (Pounds) or Value (Dollars)',
+                       breaks = seq(0, 60000000, by = 20000000), 
+                       labels = val.labs) +
+  #scale_color_manual(values = c('black', 'black'), linetype = c('solid', 'dashed')) +
+  scale_linetype_manual('', values=c('Landings' = 1,'Value' = 2)) +
+  #theme(legend.direction = "horizontal", legend.position = "bottom") + 
+  ecodata::theme_ts()
+p2 +  theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 16),
+            axis.ticks.length = unit(-1.4, "mm"),
+            legend.position = c(0.50, 0.90),
+            legend.text=element_text(size=14)) 
+ggsave(path = here::here('figures'),'figure_2.jpg', 
+       width = 9, height = 6, units = "in", dpi = 300)
 
-### ---------- Weights and Lengths --------------- ###
+
+# -- FIGURE 4 -- #
+# Number of processors and stat areas 
+# pulling in the data
+ptab <- read.csv(here::here('data/Illex_Vessel_Pivot_Tables_Years_Combined.csv'))
+lw_data <- read.csv(here::here('data/ilxsm/Entire_Database_Pull_ILXSM_2.14.23.csv'))
+dat <- read.csv(here::here('data/ilxsm/ILXSM_EntirePull_Wdealerinfo_3_14_21.csv'))
+# making sure all variables are in same units
+dat <- dat %>%
+  mutate(PARAM_VALUE_NUM = case_when(PARAM_TYPE == 'ML' & UNIT_MEASURE == 'CM' ~ PARAM_VALUE_NUM * 10, 
+                                     PARAM_TYPE == 'ML' & UNIT_MEASURE == 'MM'~ PARAM_VALUE_NUM, 
+                                     PARAM_TYPE == 'WT' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM))
+# putting date in correct format and adding in time points of interest
+dat$LAND_DATE <-lubridate::dmy(dat$LAND_DATE)
+dat <- dat %>%
+  mutate(year = lubridate::year(LAND_DATE),
+         month = lubridate::month(LAND_DATE),
+         week = lubridate::week(LAND_DATE), 
+         day = lubridate::day(LAND_DATE))
+# Summarizing data sets 
+ptab_tally <- ptab %>% 
+  group_by(Year, Processor) %>%
+  summarise(n_vessels = length(unique(Fishing.Vessel)))
+
+ptab_stat <- ptab %>% 
+  group_by(Year) %>%
+  summarise(n_vessels = length(unique(Fishing.Vessel)))
+
+dat_stat <- dat %>% 
+  group_by(year) %>%
+  summarise(n_vessels = length(unique(VESSEL_NAME)), 
+            n_stat_areas = length(unique(AREA_CODE)))
+
+ptab_stat$stat_area <- dat_stat %>% filter(year %in% c(2021, 2022)) %>% select(n_stat_areas)
+ptab_stat <- ptab_stat %>% rename(stat_area = stat_area$n_stat_areas)
+# ptab_stat
+p1 = ggplot(data = ptab_stat, aes(x = factor(Year), y = n_vessels, 
+                                  fill = factor(Year))) +
+  geom_bar(stat ='identity', position = position_dodge(),
+           col = 'black') +
+  ylab('Number of Vessels') +
+  xlab('Year') +
+  #labs(fill = 'Year') +
+  scale_fill_grey(start = 0, end = 0.8) + 
+  ecodata::theme_ts()
+
+p1 = p1 +  theme(legend.position = 'none', 
+            text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            axis.ticks.length = unit(-1.4, "mm")) 
+
+
+p2 = ggplot(data = ptab_tally, aes(x = factor(Year), y = n_vessels, 
+                                   fill = factor(Processor))) +
+  geom_bar(stat ='identity', position = position_dodge(),
+           col = 'black') +
+  ylab('Number of Vessels') +
+  xlab('Year') +
+  labs(fill = 'Processor/Dealer') +
+  scale_fill_grey(start = 0, end = 0.8) + 
+  annotate('text', x = 0.5, y = 16, label= '(a)', size = 5) +
+  ecodata::theme_ts()
+
+p2 = p2 +  theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            axis.ticks.length = unit(-1.4, "mm"), 
+            legend.position = c(0.79, 0.80),
+            legend.background = element_rect(fill = "white", color = "black"), 
+            legend.title = element_text(size = 12),
+            legend.text = element_text(size = 8))
+  
+  
+
+p3 = ggplot(data = ptab_stat, aes(x = factor(Year), y = stat_area$n_stat_areas)) +
+  geom_bar(stat ='identity', position = position_dodge(),
+           col = 'black', fill = 'grey22') +
+  ylab('Number of Statistical Areas Sampled') +
+  xlab('Year') +
+  labs(fill = 'Year') +
+  #scale_fill_grey(start = 0, end = 0.8) + 
+  annotate('text', x = 0.5, y = 18, label= '(b)', size = 5) +
+  ecodata::theme_ts()
+
+p3 = p3 +  theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            axis.ticks.length = unit(-1.4, "mm")) 
+
+p2 + p3
+ggsave(path = here::here('figures'),'figure_4.jpeg',
+       width = 10, height = 6, units = "in", dpi = 300)
+
+
+## -- FIUGRE 5 -- ## 
+# Density ridge plot weekly weights/lengths across stat areas
 library(tidyverse)
 # changed from dt to ml_wt_22 for app
 wt <- dat %>%
@@ -252,8 +296,6 @@ wt <- dat %>%
 ml <- dat %>%
   filter(PARAM_TYPE == 'ML') %>%
   rename(length = PARAM_VALUE_NUM)
-
-
 
 l1 = ggplot(wt %>% filter(year %in% c(2021, 2022)), 
             aes(x = weight, y = factor(week), fill =  factor(AREA_CODE))) +
@@ -322,8 +364,9 @@ wt1 + ml1
 
 
 
-### -------- 2d Histogram --------- ### 
-# Consolidate the dataset to just samples that have paired weight/length values
+## -- FIGURE 6 --  ##
+# 2d Histogram
+# Consolidate dataset to only samples with paired weight/length values
 ml.c <- ml %>% select(LAND_DATE,AREA_CODE,ORGANISM_ID, 
                                 length,VESSEL_NAME, VTR_SERIAL_NUM)
 
