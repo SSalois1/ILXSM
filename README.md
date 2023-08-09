@@ -7,7 +7,6 @@
 In order to acquire high frequency, region-wide size and weight data of shortfin squid our researchers and industry partners have worked together to develop an efficient electronic system to collect standardized shortfin squid size and weight data. This electronic data collection system was installed at processing facilities across the region starting in 2021. Since then, processors have been helping collect data to better understand the size composition of shortfin squid cohorts and population while the fishery is open. This repository serves as a landing page for visualizing and analyzing this important new data stream.
 
 
-###HELLLL0000000000
 
 This [document](https://ssalois1.github.io/ILXSM/docs/ilxsm_stats_and_maps.html) serves as an overview of the available data and will be updated as new reports are generated from the Cooperative Research Branch. 
 
