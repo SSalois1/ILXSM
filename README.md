@@ -1,6 +1,5 @@
 # ILXSM: Shortfin Squid Electronic Size Monitoring Program
 
-### Adding a change 
 
 
 ## Overview
