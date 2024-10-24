@@ -1,0 +1,492 @@
+---
+title: "ILXSM Update"
+author: "Sarah Salois, Thomas Swiader"
+date: "7/12/2024"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    code_fold: hide
+    number_sections: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+```{r, data}
+# testing
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(patchwork)
+library(ecodata)
+lw_data <- read.csv(here::here('data/ilxsm/ILXSM_EntirePull_10-09-2024.csv'))
+
+# Coastal shapefiles
+load(here::here('shapefiles/nes_map.Rdata'))
+
+# canada <- sf::st_read(here::here('shapefiles/Canada.shp'), quiet = TRUE) %>%
+#   sf::st_set_crs(4326) 
+# usa <- sf::st_read(here::here('shapefiles/USA.shp'), quiet = TRUE) %>%
+#   sf::st_set_crs(4326) 
+# sf::sf_use_s2(FALSE)
+# us.coast = sf::st_union(usa %>% sf::st_as_sf())
+# ca.coast = sf::st_union(canada %>% sf::st_as_sf())
+```
+
+
+```{r, wrangle}
+# Make sure all data are in same units, if not convert
+# just a check
+# unique(lw_data$UNIT_MEASURE)
+# "CM" "GM" "MM" "LB"
+lbs <- which(lw_data$UNIT_MEASURE == 'LB')
+# one rouge tally w/lbs but no param_value_num, so removing
+chkme <- lw_data[lbs,]
+# lw_data <- lw_data[-lbs,]
+# one rouge tally w/lbs this one does have a param_value_num, fixing the unit
+lw_data[row.names(chkme),"UNIT_MEASURE"] <- 'GM'
+WT <- which(lw_data$PARAM_TYPE == 'WT') # None, so no need to adjust as below
+lw_data <- lw_data %>%
+  mutate(PARAM_VALUE_NUM = case_when(PARAM_TYPE == 'ML' & UNIT_MEASURE == 'CM' ~ PARAM_VALUE_NUM * 10, 
+                            PARAM_TYPE == 'ML' & UNIT_MEASURE == 'MM'~ PARAM_VALUE_NUM, 
+                           # PARAM_TYPE == 'WT' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM,
+                             PARAM_TYPE == 'OW' & UNIT_MEASURE == 'GM' ~ PARAM_VALUE_NUM))
+cm <- which(lw_data$UNIT_MEASURE == 'CM')
+#chkme2 <- lw_data[cm,]
+lw_data[cm,"UNIT_MEASURE"] <- 'MM'
+#unique(lw_data$UNIT_MEASURE)
+
+lw_data$LAND_DATE <-lubridate::dmy(lw_data$LAND_DATE)
+lw_data <- lw_data %>%
+  mutate(year = lubridate::year(LAND_DATE),
+         month = lubridate::month(LAND_DATE),
+         week = lubridate::week(LAND_DATE), 
+         day = lubridate::day(LAND_DATE))
+
+unique_areas <- sort(unique(lw_data$AREA_CODE))
+
+wt <- lw_data %>%
+  filter(PARAM_TYPE =='OW') %>% 
+  rename(weight = PARAM_VALUE_NUM)
+ml <- lw_data %>%
+  filter(PARAM_TYPE == 'ML') %>%
+  rename(length = PARAM_VALUE_NUM)
+
+ml.c <- ml %>% select(LAND_DATE,AREA_CODE,ORGANISM_ID, 
+                                length,VESSEL_NAME, VTR_SERIAL_NUM)
+
+wt.c <- wt %>% select(LAND_DATE,AREA_CODE,ORGANISM_ID, 
+                                weight,VESSEL_NAME, VTR_SERIAL_NUM)
+
+lw_paired <- right_join(ml.c, wt.c, 
+                        by = c('LAND_DATE','AREA_CODE','ORGANISM_ID', 
+                               'VESSEL_NAME', 'VTR_SERIAL_NUM'))
+
+lw_paired <- na.omit(lw_paired)
+lw_paired <- lw_paired %>% relocate(weight, .after = length)
+
+lw_paired <- lw_paired %>%
+  mutate(year = lubridate::year(LAND_DATE),
+         month = lubridate::month(LAND_DATE),
+         week = lubridate::week(LAND_DATE), 
+         day = lubridate::day(LAND_DATE))
+
+
+
+```
+
+
+
+
+```{r, tally}
+## Stat areas
+stat.areas <- sf::st_read(here::here('shapefiles/groundfish_stat_areas.shp'),
+                          quiet = TRUE) %>%
+  sf::st_set_crs(4326) 
+
+# Isolate stat areas fished from data frame
+unq.stat.areas <- sort(unique(lw_data$AREA_CODE))
+ilxsm.stat.areas <- stat.areas[na.omit(stat.areas$Id %in% unq.stat.areas),]
+
+# For multiple polygons - use this!
+stat.ctrds <- sf::st_point_on_surface(ilxsm.stat.areas)
+# ggplot() +
+#   geom_sf(data = ilxsm.stat.areas) +
+#   geom_sf(data = stat.ctrds, color = "red", size = 0.1) +
+#   theme_void()
+
+# create a dataframe and isolate coordinates 
+stat.areas.df <- stat.ctrds %>%
+  dplyr::mutate(lon = sf::st_coordinates(.)[,1],
+                lat = sf::st_coordinates(.)[,2]) %>% 
+  as.data.frame()
+un.df.sa = unique(stat.areas.df$Id)
+# extract coordinates and save to squibs data
+lw_data$stat.lat <- NA
+lw_data$stat.lon <- NA
+for (i in 1:length(un.df.sa)){
+  tmp <- subset(lw_data, AREA_CODE == un.df.sa[i])
+  locs <- which(lw_data$AREA_CODE %in% tmp$AREA_CODE)
+  b <- subset(stat.areas.df, Id == un.df.sa[i], select = 'lat')
+  c <- subset(stat.areas.df, Id == un.df.sa[i], select = 'lon')
+  lw_data[locs,'stat.lat'] <- b$lat
+  lw_data[locs,'stat.lon'] <- c$lon
+}
+
+# tally by stat area
+df_tally_stat <- lw_data %>% 
+  group_by(AREA_CODE, year) %>%
+  summarise(n = length(ORGANISM_ID), 
+            lon = mean(stat.lon), 
+            lat = mean(stat.lat))
+
+
+```
+
+### ILXSM Spatial Extent
+
+Map of Northeast United States Continental Shelf Large Marine Ecosystem (NES LME).
+Bathymetry is indicated by a dark grey contours. The black polygons overlaid on 
+the bathymetry depict the boundaries of the [Greater Atlantic Region Fisheries 
+Statistical Areas](https://www.fisheries.noaa.gov/resource/map/greater-atlantic-region-statistical-areas). The location of each circle demarks the centroid of the statistical area
+polygon. Note that each circle is located at the center coordinates of the 
+statistical area and does not represent specific fishing coordinates to ensure 
+confidentiality. The color of the circle indicates the collection year, where 
+yellow = 2021, purple = 2022, magenta = 2023, and peach = 2024. The size of 
+each point represents the number of northern shortfin squid 
+(*Illex illecebrosus*) samples reported through Shortfin Squid Electronic Size 
+Monitoring Pilot Project in the associated statistical area. 
+
+```{r, maps}
+
+# bathy <- marmap::getNOAA.bathy(-80,-58, 33, 46)
+# bathy = marmap::fortify.bathy(bathy)
+#2021
+ggplot() +
+ geom_sf(data = us.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ca.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ilxsm.stat.areas %>% st_as_sf() ,  
+          fill = NA, color = 'gray20', lwd = 0.6) +
+  geom_contour(data = bathy,
+               aes(x=x,y=y,z=-1*z),
+               breaks=c(0,50,100,200, Inf),
+               linewidth=c(0.3),
+               col = 'darkgrey') +
+  geom_point(data = df_tally_stat %>% filter(year == 2021),
+             aes(x = lon, y = lat, size = n), 
+             color = 'black', bg = 'gold1',
+             pch = 21) +
+  labs(size = 'No. of Squid') + 
+  geom_text()+
+  annotate('text', label = '2021', x = -74.5, y = 43.5, size = 8, 
+           colour = 'black' ) +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,44), datum = sf::st_crs(4326)) +
+  xlab('Longitude') + 
+  ylab('Latitude') +
+  theme_bw() + 
+  theme(legend.position = c(0.85, 0.2)) +
+  theme(legend.background = element_rect(linetype="solid", 
+                                         colour ="grey20")) +
+  theme(legend.key.size = unit(0.5, 'cm')) + 
+  theme(axis.text = element_text(size = 13), 
+        axis.title = element_text(size = 15),
+        axis.ticks.length = unit(-1.4, "mm")) 
+# save
+ggsave(path = here::here('figures'),'ilxsm_2021.png',
+       width = 10, height = 8, units = "in", dpi = 300)
+#2022
+ggplot() +
+ geom_sf(data = us.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ca.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ilxsm.stat.areas %>% st_as_sf() ,  
+          fill = NA, color = 'gray20', lwd = 0.6) +
+  geom_contour(data = bathy,
+               aes(x=x,y=y,z=-1*z),
+               breaks=c(0,50,100,200, Inf),
+               linewidth=c(0.3),
+               col = 'darkgrey') +
+  geom_point(data = df_tally_stat %>% filter(year == 2022),
+             aes(x = lon, y = lat, size = n), 
+             color = 'black', bg = 'slateblue3',
+             pch = 21) +
+  labs(size = 'No. of Squid') +
+  geom_text()+
+  annotate('text', label = '2022', x = -74.5, y = 43.5, size = 8, 
+           colour = 'black' ) +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,44), datum = sf::st_crs(4326)) +
+  xlab('Longitude') + 
+  ylab('Latitude') +
+  theme_bw() + 
+  theme(legend.position = c(0.85, 0.2)) +
+  theme(legend.background = element_rect(linetype="solid", 
+                                         colour ="grey20")) +
+  theme(legend.key.size = unit(0.5, 'cm')) + 
+  theme(axis.text = element_text(size = 13), 
+        axis.title = element_text(size = 15),
+        axis.ticks.length = unit(-1.4, "mm")) 
+# save
+ggsave(path = here::here('figures'),'ilxsm_2022.png', 
+       width = 10, height = 8, units = "in", dpi = 300) 
+
+#2023
+ggplot() +
+ geom_sf(data = us.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ca.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ilxsm.stat.areas %>% st_as_sf() ,  
+          fill = NA, color = 'gray20', lwd = 0.6) +
+  geom_contour(data = bathy,
+               aes(x=x,y=y,z=-1*z),
+               breaks=c(0,50,100,200, Inf),
+               linewidth=c(0.3),
+               col = 'darkgrey') +
+  geom_point(data = df_tally_stat %>% filter(year == 2023),
+             aes(x = lon, y = lat, size = n), 
+             color = 'black', bg = 'violetred1',
+             pch = 21) +
+  labs(size = 'No. of Squid') +
+  geom_text()+
+  annotate('text', label = '2023', x = -74.5, y = 43.5, size = 8, 
+           colour = 'black' ) +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,44), datum = sf::st_crs(4326)) +
+  xlab('Longitude') + 
+  ylab('Latitude') +
+  theme_bw() + 
+  theme(legend.position = c(0.85, 0.2)) +
+  theme(legend.background = element_rect(linetype="solid", 
+                                         colour ="grey20")) +
+  theme(legend.key.size = unit(0.5, 'cm')) + 
+  theme(axis.text = element_text(size = 13), 
+        axis.title = element_text(size = 15),
+        axis.ticks.length = unit(-1.4, "mm")) 
+# save
+ggsave(path = here::here('figures'),'ilxsm_2023.png', 
+       width = 10, height = 8, units = "in", dpi = 300) 
+#2024
+ggplot() +
+ geom_sf(data = us.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ca.coast %>% st_as_sf(), color = 'gray20', fill = 'lightgrey') +
+  geom_sf(data = ilxsm.stat.areas %>% st_as_sf() ,  
+          fill = NA, color = 'gray20', lwd = 0.6) +
+  geom_contour(data = bathy,
+               aes(x=x,y=y,z=-1*z),
+               breaks=c(0,50,100,200, Inf),
+               linewidth=c(0.3),
+               col = 'darkgrey') +
+  geom_point(data = df_tally_stat %>% filter(year == 2024),
+             aes(x = lon, y = lat, size = n), 
+             color = 'black', bg = '#FFBE98',
+             pch = 21) +
+  labs(size = 'No. of Squid') +
+  geom_text()+
+  annotate('text', label = '2024', x = -74.5, y = 43.5, size = 8, 
+           colour = 'black' ) +
+  coord_sf(xlim = c(-76,-66.0), ylim = c(35.5,44), datum = sf::st_crs(4326)) +
+  xlab('Longitude') + 
+  ylab('Latitude') +
+  theme_bw() + 
+  theme(legend.position = c(0.85, 0.2)) +
+  theme(legend.background = element_rect(linetype="solid", 
+                                         colour ="grey20")) +
+  theme(legend.key.size = unit(0.5, 'cm')) + 
+  theme(axis.text = element_text(size = 13), 
+        axis.title = element_text(size = 15),
+        axis.ticks.length = unit(-1.4, "mm")) 
+# save
+ggsave(path = here::here('figures'),'ilxsm_2024.png', 
+       width = 10, height = 8, units = "in", dpi = 300) 
+
+```
+
+
+### Length x weight across years
+
+> Comparisons of mantle length and body weight across years
+
+Bar Charts: 
+
+Mean body weight (in grams) and mean mantle length (in millimeters) as a function 
+of year. Error bars are 95% confidence limits. 
+
++ (2021): N = `r nrow(lw_paired %>% filter(year == 2021))`
++ (2022): N = `r nrow(lw_paired %>% filter(year == 2022))`
++ (2023): N = `r nrow(lw_paired %>% filter(year == 2023))`
++ (2024): N = `r nrow(lw_paired %>% filter(year == 2024))`
+
+
+```{r, barchart}
+wt_stats <- wt %>%
+  group_by(year) %>%
+  summarise(mean = mean(weight), 
+            sd = sd(weight),
+            min = min(weight), 
+            max = max(weight))
+
+ml_stats <- ml %>%
+  group_by(year) %>%
+  summarise(mean = mean(length), 
+            sd = sd(length),
+            min = min(length), 
+            max = max(length))
+
+wt_stats$param <- 'weight'
+ml_stats$param <- 'mantle_length'
+
+
+ilxsm_stats <- rbind(wt_stats, ml_stats)
+ilxsm_stats$conf_interval <- (1.96*ilxsm_stats$sd)
+# Labels outside bars: vjust = -0.5, Inside bars:  vjust = 1.6,
+p1 = ggplot(data = wt_stats, aes(x = year, y = mean)) +
+  geom_bar(stat ='identity', fill = c('gold1','slateblue3','violetred1', '#FFBE98'),
+           col = 'black') +
+  ylab('Mean weight (g)') +
+  xlab('Year') +
+  ylim(0,200) +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width=.2,
+                position=position_dodge(.9)) + 
+  ecodata::theme_ts()
+p1 = p1 +  theme(text = element_text(size = 14), 
+            axis.text = element_text(size = 13), 
+            axis.title = element_text(size = 15),
+            axis.ticks.length = unit(-1.4, "mm")) 
+
+
+p2 = ggplot(data = ml_stats, aes(x = year, y = mean)) +
+  geom_bar(stat ='identity', fill = c('gold1','slateblue3','violetred1', '#FFBE98'),
+           col = 'black') +
+  ylab('Mean mantle length (mm)') +
+  xlab('Year') +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width=.2,
+                position=position_dodge(.9)) + 
+   ecodata::theme_ts()
+p2 = p2 +  theme(text = element_text(size = 14), 
+                 axis.text = element_text(size = 13), 
+                 axis.title = element_text(size = 15),
+                 axis.ticks.length = unit(-1.4, "mm")) 
+
+
+
+p1 + p2
+# save plot 
+ggsave(path = here::here('figures'),'ilxsm_mean_length_weight_by_year.png', 
+       width = 10, height = 8, units = "in", dpi = 300) 
+```
+
+
+2d Histograms:
+
+Density heat maps of mantle length (mm) as a function of body weight (g) 
+in year 1 (2021), year 2 (2022), year 3 (2023) and 4 (2024) of the 
+Shortfin Squid Electronic Size Monitoring Pilot Project.
+
+```{r, hist}
+# 
+# Consolidate dataset to only samples with paired weight/length values
+
+# COlor palettes
+pal <- wesanderson::wes_palette("Zissou1", 21, type = "continuous")
+# 2d histogram with default option
+# ggplot(lw_paired, aes(x=length, y=weight)) +
+#   geom_bin2d() +
+#   theme_bw()
+
+# # Bin size control + color palette
+# gd = ggplot(lw_paired, aes(x=length, y=weight)) +
+#   geom_bin2d(bins = 70) +
+#   scale_fill_gradientn(colours=pal) +
+#   xlab('Mantle Length (mm)') +
+#   ylab('Body Weight (g)') +
+#   theme_bw()
+# gd + theme(text = element_text(size = 14), 
+#            axis.text = element_text(size = 13), 
+#            axis.title = element_text(size = 15))
+
+
+
+g3 = ggplot(lw_paired, 
+            aes(x=length, y=weight)) +
+  geom_hex() +
+  scale_fill_gradientn(colours=pal) +
+  xlab('Mantle Length (mm)') +
+  ylab('Body Weight (g)') +
+  labs(fill = 'Count') +
+  ecodata::theme_facet() +
+  facet_wrap(~year)
+g3 + theme(text = element_text(size = 14), 
+           axis.text = element_text(size = 13), 
+           axis.title = element_text(size = 15),
+           legend.position = c(0.92, 0.23), 
+           legend.background = element_rect(fill = "white", color = "black"), 
+           legend.title = element_text(size = 7),
+           legend.text = element_text(size = 7)) 
+
+
+ggsave(path = here::here('figures'),'ilxsm_2dhist_by_year.png', 
+       width = 10, height = 8, units = "in", dpi = 300) 
+
+```
+
+
+
+### 2024 ILXSM data
+
+Weekly distributions of northern shortfin squid (Illex illecebrosus)
+body weight (in grams) and mantle length (in millimeters) samples for 2024. 
+
+The figures below represent the size of squid over time, where squid weight 
+(or length) increases from left to right, with specific weight (or length) 
+values labeled along the horizontal line (axis) under the ridge (peach area). 
+The height of the ridge relates to the number of squid at the corresponding 
+weight on the horizontal axis. 
+
++ For instance, the greater the height at a given weight, the more squid are 
+found at that weight.
++ The wider the base of the ridge, the wider range of weights of the squid 
+sampled, thus the more variable the sizes collected that week were.
+
+The ridgeplots with color gradients represent the empirical cumulative density 
+function for the distribution. Here, the probabilities are mapped onto color.
+
+```{r, ridgeplots}
+# Lengths
+ggplot(ml %>% filter(year == 2024), aes(x = length, y = factor(week))) +
+    ggridges::geom_density_ridges(alpha = 0.7, rel_min_height = 0.001, fill='#f6a192') + 
+  labs(title = '2024 Illex Lengths',
+       x = 'Lengths (mm)', y = 'Week of Year') +
+  ecodata::theme_ts()
+
+ggplot(ml %>% filter(year == 2024), aes(x = length, y = factor(week),
+                                           fill = 0.5 - abs(0.5 - stat(ecdf))))  +
+  ggridges::stat_density_ridges(calc_ecdf = TRUE, rel_min_height = 0.0001,
+                      geom = "density_ridges_gradient") +
+  labs(title = '2024 Illex Lengths',
+       x = 'Weight (gm)', y = 'Week of Year') +
+  scale_fill_viridis_c(name = 'Tail probability', direction = -1) +
+  ecodata::theme_ts()
+
+# Weight
+ggplot(wt %>% filter(year == 2024), aes(x = weight, y = factor(week))) +
+   ggridges::geom_density_ridges(alpha = 0.7, rel_min_height = 0.001, 
+                                           fill='#f6a192') + 
+  labs(title = '2024 Illex Weights',
+       x = 'Weight (gm)', y = 'Week of Year') +
+  ecodata::theme_ts()
+
+
+ggplot(wt %>% filter(year == 2024), aes(x = weight, y = factor(week),
+                                           fill = 0.5 - abs(0.5 - stat(ecdf))))  +
+  ggridges::stat_density_ridges(calc_ecdf = TRUE, rel_min_height = 0.0001,
+                      geom = "density_ridges_gradient") +
+  labs(title = '2024 Illex Weights',
+       x = 'Weight (gm)', y = 'Week of Year') +
+  scale_fill_viridis_c(name = 'Tail probability', direction = -1) +
+  ecodata::theme_ts()
+# # save
+# ggsave(path = here::here('figures'),'ilxsm_mean_length_weight_by_year.png', 
+#        width = 10, height = 8, units = "in", dpi = 300) 
+```
+
+
