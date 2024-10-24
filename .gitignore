@@ -16,7 +16,7 @@
 
 # local folders
 /data
-/shapefiles
+
 
 # confidental data files
 *.csv
